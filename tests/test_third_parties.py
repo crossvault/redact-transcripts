@@ -325,6 +325,9 @@ ADVERSARIAL = {
     "dotted-handles": "hi @fake.user.name.x ",
     "dotted-decorator-calls": "x @app.route.get.post(",
     "code-noun": "@fake-x decorator ",
+    "shell-args-dash-slash": "ls" + " -/" * 99 + " (@x\n",
+    "shell-args-dash-dot": "ls" + " -." * 99 + " (@x\n",
+    "shell-args-one-line": " -/",
 }
 SIZES = (8_000, 40_000, 200_000)
 LIMIT = 2.0  # seconds at 200 KB; a linear pass takes a small fraction of that

@@ -243,25 +243,44 @@ _TIMESTAMP = re.compile(r"\d{4}-\d{2}")  # `@2026-09-30T13:35Z`: "at" a time
 # A shell command that takes FILE arguments (`ls @foo`, `cat -n @rules.txt`): an `@word` in an
 # argument position right after the command (and its flags or paths) is a path. Verbs that are
 # also everyday words ("more", "open", "code" …) count only after a `$ ` prompt. Deliberately not
-# git/gh/echo/curl, whose arguments carry messages that can mention people. Matched against the
-# text before the `@` only, and only when that is short (bounded cost per match).
-_SHELL_ARGS = r"(?:[ \t]+(?:-\S{1,40}|[^\s/.]{0,80}[/.]\S{0,80}))*[ \t]+"
-_SHELL_PREFIX = re.compile(
-    r"[ \t]*(?:[$#%>][ \t]+)?(?:sudo[ \t]+)?(?:ls|ll|cat|bat|cp|mv|rm|cd|fd|tar|zip|unzip|chmod|chown"
-    r"|mkdir|rmdir|touch|stat|du|xdg-open|vim|vi|nano|scp|rsync|ln|wc)"
-    + _SHELL_ARGS
-    + r"|[ \t]*[$%][ \t]+(?:sudo[ \t]+)?(?:find|less|more|head|tail|file|open|code|source|diff|tree)"
-    + _SHELL_ARGS
+# git/gh/echo/curl, whose arguments carry messages that can mention people. Checked by a plain
+# tokenizer (no regex) on the text before the `@`, and only when that is short.
+_SHELL_VERBS = frozenset(
+    "ls ll cat bat cp mv rm cd fd tar zip unzip chmod chown mkdir rmdir touch stat du xdg-open vim vi "
+    "nano scp rsync ln wc".split()
 )
+_SHELL_PROMPT_VERBS = frozenset("find less more head tail file open code source diff tree".split())
 _SHELL_MAX = 300
+
+
+def _shell_argument_position(prefix: str) -> bool:
+    """True if ``prefix`` (the line before an ``@``) is a shell command followed only by flags
+    (``-x``) and path-shaped arguments (containing ``/`` or ``.``), ending in whitespace."""
+    if not prefix or prefix[-1] not in " \t":
+        return False
+    toks = prefix.split()
+    i, prompt = 0, False
+    if toks and toks[0] in ("$", "#", "%", ">"):
+        prompt, i = toks[0] in ("$", "%"), 1
+    if i < len(toks) and toks[i] == "sudo":
+        i += 1
+    if i >= len(toks):
+        return False
+    verb = toks[i]
+    if verb not in _SHELL_VERBS and not (prompt and verb in _SHELL_PROMPT_VERBS):
+        return False
+    return all(t.startswith("-") or "/" in t or "." in t for t in toks[i + 1 :])
+
+
 # A SQL statement: two keywords in statement order on one line (a lone "UPDATE:" or "FROM the
 # thread" in prose is not SQL). Within it, only an `@name` in parameter position is kept.
 _SQL_LINE = re.compile(
-    r"\b(?:SELECT\b[^\n]{0,200}?\bFROM|UPDATE\b[^\n]{0,200}?\bSET|INSERT[ \t]+INTO|DELETE[ \t]+FROM"
-    r"|DECLARE[ \t]+@|EXEC(?:UTE)?[ \t]+\w[^\n]{0,200}?@)\b"
+    r"\b(?:SELECT\b[^\n]{0,200}?\bFROM|UPDATE\b[^\n]{0,200}?\bSET|INSERT[ \t]{1,8}INTO|DELETE[ \t]{1,8}FROM"
+    r"|DECLARE[ \t]{1,8}@|EXEC(?:UTE)?[ \t]{1,8}\w[^\n]{0,200}?@)\b"
 )
 _SQL_PARAM_TAIL = re.compile(
-    r"(?:[=(,<>]|\b(?:AND|OR|IN|LIKE|BETWEEN|SET|DECLARE|EXEC|EXECUTE|VALUES|THEN|ELSE|WHEN|NOT|IS))[ \t]*\Z",
+    r"(?:[=(,<>]|\b(?:AND|OR|IN|LIKE|BETWEEN|SET|DECLARE|EXEC|EXECUTE|VALUES|THEN|ELSE|WHEN|NOT|IS))"
+    r"[ \t]{0,8}\Z",
     re.IGNORECASE,
 )
 # Discord mention markup `<@123…>` / `<@!123…>`.
@@ -297,32 +316,36 @@ _DISCORD_USER = re.compile(
 _TRAILER = re.compile(
     r"^([ \t>*#/;-]{0,12}(?i:co-authored-by|signed-off-by|reviewed-by|acked-by|tested-by|reported-by"
     r"|suggested-by|helped-by|approved-by|requested-by|author|committer|reviewer)"
-    r"[ \t]*:[ \t]+)(" + _WHO + r")([ \t]*<[^>\n]{0,200}>)?"
-    r"([ \t]+(?:#|//|--|/\*)[^\n]{0,200})?([ \t]*\r?\n?)$"
+    r"[ \t]{0,8}:[ \t]{1,8})(" + _WHO + r")([ \t]{0,8}<[^>\n]{0,200}>)?"
+    r"([ \t]{1,8}(?:#|//|--|/\*)[^\n]{0,200})?([ \t]{0,40}\r?\n?)$"
 )
 # `gh pr view --comments` style headers with a list of logins: `assignees:\talice, bob`.
 _GH_HEADER = re.compile(
-    r"^([ \t]{0,12}(?:author|reviewer|commenter|assignees?|reviewers?)[ \t]*:[ \t]*)"
-    r"(" + _LOGIN + r"(?:,[ \t]*" + _LOGIN + r"){0,20})([ \t]*\r?\n?)$"
+    r"^([ \t]{0,12}(?:author|reviewer|commenter|assignees?|reviewers?)[ \t]{0,8}:[ \t]{0,8})"
+    r"(" + _LOGIN + r"(?:,[ \t]{0,8}" + _LOGIN + r"){0,20})([ \t]{0,40}\r?\n?)$"
 )
 # API JSON, also one level backslash-escaped: `"login": "alice"`, `"author_name": "…"`.
 _JSON_LOGIN = re.compile(
     r'(\\?"(?:login|username|user_name|author_name|committer_name|display_name|global_name|'
-    r'author|reviewer|assignee|committer|nickname|screen_name|handle)\\?"[ \t]*:[ \t]*\\?")('
+    r'author|reviewer|assignee|committer|nickname|screen_name|handle)\\?"[ \t]{0,8}:[ \t]{0,8}\\?")('
     + _WHO
     + r')(\\?")'
 )
 # JSON `"name": "…"` is a person next to person-shaped fields on the same line; otherwise only a
 # clearly person-shaped full name is (2-4 capitalised letter-only tokens; "my-app", "Bash" stay).
-_JSON_NAME = re.compile(r'(\\?"name\\?"[ \t]*:[ \t]*\\?")(' + _WHO + r')(\\?")')
+_JSON_NAME = re.compile(r'(\\?"name\\?"[ \t]{0,8}:[ \t]{0,8}\\?")(' + _WHO + r')(\\?")')
 _JSON_PERSON_CTX = re.compile(
     r'"(?:login|email|author|committer|user|reviewer|assignee|sender|creator|username|'
-    r'avatar_url|global_name)\\?"[ \t]*:'
+    r'avatar_url|global_name)\\?"[ \t]{0,8}:'
 )
+# Tokens are separated by exactly one space (optionally with a particle), so there is only one
+# way to split a name into tokens: no ambiguous repetition, linear time.
+_NAME_TOKEN = r"[^\W\d_a-z][^\W\d_]{0,30}(?:['\u2019-][^\W\d_]{1,30})?"
 _FULL_NAME = re.compile(
-    r"(?:[^\W\d_a-z][^\W\d_]{0,30}(?:['\u2019-][^\W\d_]{1,30})?"
-    r"(?: (?:van|von|de|der|den|da|di|du|le|la|del|y|bin|al) )?"
-    r"[ ]?){2,4}\Z"
+    _NAME_TOKEN
+    + r"(?: (?:(?:van|von|de|der|den|da|di|du|le|la|del|y|bin|al) )?"
+    + _NAME_TOKEN
+    + r"){1,3} ?\Z"
 )
 _NOT_NAME_WORDS = frozenset(
     """
@@ -333,23 +356,23 @@ cache node python docker image upload download publish sync backup restore migra
 )
 # Web UI and mail headers: "alice commented on Oct 3", "Bob Example approved these changes".
 _UI_ACTION = re.compile(
-    r"^([ \t>*_-]{0,12})(" + _WHO + r")([ \t]+(?:(?:commented|reviewed)(?=[ \t]+(?:on[ \t]+)?"
-    r"(?:[A-Z][a-z]{2}[ \t]+\d|\d+[ \t]+\w+[ \t]+ago|yesterday|last[ \t]|now\b|this\b))|"
+    r"^([ \t>*_-]{0,12})(" + _WHO + r")([ \t]{1,8}(?:(?:commented|reviewed)(?=[ \t]{1,8}(?:on[ \t]{1,8})?"
+    r"(?:[A-Z][a-z]{2}[ \t]{1,8}\d|\d{1,4}[ \t]{1,8}\w{1,12}[ \t]{1,8}ago|yesterday|last[ \t]|now\b|this\b))|"
     r"approved these changes|requested changes|left a comment|left review comments|"
     r"requested a review|suggested changes|merged commit|merged \d+ commits?|closed this|"
     r"reopened this|opened this|mentioned this|added the \S+ label|self-assigned this)\b)"
 )
 # "On Tue, 29 Sep 2026, Bob <…> wrote:", "alice (Alice Example) wrote:", "Bob schrieb:".
 _WROTE = re.compile(
-    r"^([ \t>*_-]{0,12}(?:On [^\n]{3,80}?,[ \t]*)?)("
+    r"^([ \t>*_-]{0,12}(?:On [^\n]{3,80}?,[ \t]{0,8})?)("
     + _WHO
-    + r")([ \t]*)(<[^>\n]{0,200}>|\([^)\n]{0,120}\))?"
-    r"([ \t]+(?:wrote|commented|replied|schrieb|kommentierte|antwortete)[ \t]*:)"
+    + r")([ \t]{0,8})(<[^>\n]{0,200}>|\([^)\n]{0,120}\))?"
+    r"([ \t]{1,8}(?:wrote|commented|replied|schrieb|kommentierte|antwortete)[ \t]{0,8}:)"
 )
 # German mail clients put the verb first: "Am 29.09.2026 um 14:02 schrieb Bob <…>:".
 _SCHRIEB = re.compile(
-    r"^([ \t>*_-]{0,12}(?:Am [^\n]{3,80}?[ \t])?schrieb[ \t]+)(" + _WHO + r")([ \t]*)"
-    r"(<[^>\n]{0,200}>|\([^)\n]{0,120}\))?([ \t]*:)"
+    r"^([ \t>*_-]{0,12}(?:Am [^\n]{3,80}?[ \t])?schrieb[ \t]{1,8})(" + _WHO + r")([ \t]{0,8})"
+    r"(<[^>\n]{0,200}>|\([^)\n]{0,120}\))?([ \t]{0,8}:)"
 )
 # The same shape as the `pii.email` rule: only addresses that survived it reach this rule.
 _EMAIL = re.compile(
@@ -616,7 +639,7 @@ class People:
             return m.group(0)  # a doc-comment tag line: ` * @foo`
         if tail.endswith("=") or (tail.endswith("(") and tail[-2:-1].isalnum()):
             return m.group(0)  # `x = @id`, `fn(@x)`
-        if start <= _SHELL_MAX and _SHELL_PREFIX.fullmatch(s, 0, start):
+        if start <= _SHELL_MAX and _shell_argument_position(s[:start]):
             return m.group(0)  # shell `ls @foo`, `$ cat -n @rules.txt`: a path argument
         if self._is_sql_line(s) and _SQL_PARAM_TAIL.search(s, max(0, start - 12), start):
             return m.group(0)  # SQL `WHERE id = @id`, `VALUES (@a, @b)`

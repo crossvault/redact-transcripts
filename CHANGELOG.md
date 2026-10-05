@@ -20,7 +20,8 @@ All notable changes are listed here. The format follows
 - `Config(person_template=...)` for the placeholder; `Redactor.reset()` starts a new transcript.
 - `vectors/third_party.json`: fictional people, code near-misses and known misses (CC0).
 - Dotted handles (`@fake.user`, `@name.bsky.social`) are recognised.
-- Timing tests at 8, 40 and 200 KB with adversarial inputs for every `person.*` pattern.
+- Timing tests: an audit runs every `person.*` regular expression on adversarial lines of 8, 40
+  and 200 bytes, and the whole pass at 8, 40 and 200 KB, each with a hard timeout.
 
 ### Changed
 - `Redactor` keeps per-transcript state when `third_parties` is on; the formats and
