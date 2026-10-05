@@ -22,14 +22,17 @@ from .formats import (
     redact_bytes,
     register_format,
 )
+from .people import People
 from .rules import Rule, default_rules
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 
-def redact_text(text: str) -> str:
-    """Redact one string with the default rules."""
-    return Redactor().redact_text(text)
+def redact_text(text: str, third_parties: bool = False, keep_people: "tuple[str, ...]" = ()) -> str:
+    """Redact one string with the default rules (plus the ``person.*`` rules if ``third_parties``)."""
+    return Redactor(config=Config(keep_people=tuple(keep_people)), third_parties=third_parties).redact_text(
+        text
+    )
 
 
 __all__ = [
@@ -39,6 +42,7 @@ __all__ = [
     "JSONL",
     "JsonlFormat",
     "KEYED_VALUE",
+    "People",
     "Redactor",
     "Report",
     "Rule",

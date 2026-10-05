@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from redact_transcripts import Redactor, StreamRedactor, redact_bytes
+from redact_transcripts import Config, Redactor, StreamRedactor, redact_bytes
 
 VECTOR_DIR = Path(__file__).resolve().parent.parent / "vectors"
 EXPECTS = {"redacted", "unchanged", "known_miss"}
@@ -27,13 +27,27 @@ def _load():
 VECTORS = _load()
 
 
+# Persons in third_party.json are fictional: every name or handle contains FAKE or EXAMPLE, except
+# this well-known placeholder name (the Japanese equivalent of "John Doe").
+PLACEHOLDER_NAMES = {"山田 太郎"}
+
+
+def _options(vec):
+    return {"third_parties": False, "keep_people": (), **vec.get("options", {})}
+
+
+def _redactor(vec):
+    o = _options(vec)
+    return Redactor(config=Config(keep_people=tuple(o["keep_people"])), third_parties=o["third_parties"])
+
+
 def _run(vec):
     if vec["mode"] == "stream":
-        s = StreamRedactor(Redactor())
+        s = StreamRedactor(_redactor(vec))
         out = "".join(s.feed(c) for c in vec["chunks"]) + s.close()
         return "".join(vec["chunks"]), out, s.report.rules
     raw = vec["input"].encode("utf-8")
-    out, report = redact_bytes(raw, format=vec["mode"])
+    out, report = redact_bytes(raw, format=vec["mode"], **_options(vec))
     return vec["input"], out.decode("utf-8"), report.rules
 
 
@@ -64,9 +78,9 @@ def test_vector(vec):
 @pytest.mark.parametrize("vec", [v for v in VECTORS if v.values[0]["mode"] in ("text", "stream")])
 def test_stream_equals_whole_text_for_every_split_point(vec):
     text = "".join(vec["chunks"]) if vec["mode"] == "stream" else vec["input"]
-    whole = Redactor().redact_text(text)
+    whole = _redactor(vec).redact_text(text)
     for cut in range(len(text) + 1):
-        s = StreamRedactor(Redactor())
+        s = StreamRedactor(_redactor(vec))
         got = s.feed(text[:cut]) + s.feed(text[cut:]) + s.close()
         assert got == whole, cut
 
@@ -84,3 +98,13 @@ def test_secret_vectors_are_obviously_synthetic(vec):
     for needle in vec["absent"]:
         # an all-digit needle cannot be a credential on its own (numeric-password vectors)
         assert "FAKE" in needle or "EXAMPLE" in needle or "NOTAREALKEY" in needle or needle.isdigit(), needle
+
+
+@pytest.mark.parametrize("vec", VECTORS)
+def test_person_vectors_are_obviously_fictional(vec):
+    """Every person a third-party vector redacts is marked fake (or is a placeholder name)."""
+    if not any(r.startswith("person.") for r in vec.get("rules", [])):
+        return
+    for needle in vec["absent"]:
+        low = needle.lower()
+        assert "fake" in low or "example" in low or needle in PLACEHOLDER_NAMES or needle.isdigit(), needle

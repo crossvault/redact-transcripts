@@ -18,6 +18,9 @@ parent links, and can be shared or archived. (Paths such as `cwd` do lose the us
 - **Streams.** Redact a log tail or a streamed response chunk by chunk; a secret cut in half by a
   chunk boundary is still caught.
 - **Reports never contain secrets**, only rule names, counts and line numbers.
+- **Third parties, opt-in.** `--third-parties` replaces other people's `@handles` and attributed
+  names (commit trailers, `Author:` lines, "X wrote:", login fields) with stable placeholders such
+  as `[PERSON-1]`.
 - **A public test corpus** (`vectors/`, CC0) of synthetic secret shapes, tricky encodings and
   near-misses that must *not* be redacted. Reuse it to test your own scanner.
 
@@ -33,7 +36,7 @@ $ pip install redact-transcripts
 <!-- readme-test -->
 ```console
 $ redact-transcripts --version
-redact-transcripts 0.1.0
+redact-transcripts 0.2.0
 ```
 
 The examples below run from a checkout of this repository, and the test suite checks them
@@ -112,9 +115,62 @@ for chunk in chunks:
 send(stream.close())
 ```
 
+## Third parties (opt-in)
+
+A transcript also carries people who never agreed to be in it: a reviewer's `@handle`, a
+`Co-authored-by:` trailer, an `Author:` line from `git log`, a mail quote header, a `"login"` field
+in pasted API output. `--third-parties` (Python: `Redactor(third_parties=True)`) replaces each of
+them with a numbered placeholder. A person keeps the same number for the whole transcript, so the
+text stays readable:
+
+<!-- readme-test -->
+```console
+$ printf 'Co-authored-by: Dora Fakename <dora@corp.example>\nthanks @fake-mira, cc @my-own-handle\n' | redact-transcripts - --third-parties --keep-person my-own-handle
+Co-authored-by: [PERSON-1] <[REDACTED:pii.email]>
+thanks @[PERSON-2], cc @my-own-handle
+```
+
+It works by **context, not by name recognition**: a word is treated as a person only where the text
+itself says so.
+
+| Rule | Catches |
+|---|---|
+| `person.handle` | `@mentions` (not decorators, annotations, npm scopes, CSS at-rules, JSDoc tags, SQL parameters, Makefile `@echo` …), Discord `<@id>` mentions, `"login"`/`"username"`/`"author_name"` … fields in JSON text, `assignees:`-style login lists |
+| `person.name` | `Co-authored-by:`, `Signed-off-by:`, `Reviewed-by:` and other trailers, `Author:`/`Committer:` lines, "X commented on Oct 3", "X approved these changes", "On …, X wrote:", "X (Real Name) wrote:", "Am … schrieb X:", a `"name"` field next to a login or e-mail field |
+| `person.email_local` | the local part of an e-mail address that `pii.email` kept (an address at a kept domain, or all addresses when `pii.email` is disabled): `[PERSON-1]@example.com` |
+| `person.profile_url` | the handle in `github.com/<login>`, `gitlab.com/<login>`, `x.com/<user>` (also `/status/<id>`), `<host>/@<user>`, `bsky.app/profile/<handle>`, `discord.com/users/<id>` |
+| `person.keyed_value` | JSON formats: a string under a person key (`login`, `username`, `author`, `committer`, `display_name` …), or under `name` when the same object has a `login`, `email` or `avatar_url` key |
+
+The same identity gets the same number wherever it appears: `@fake-mira` and
+`fake-mira@example.org` both become `[PERSON-n]`. Numbering starts again for each file (or each
+`StreamRedactor`); a `Redactor` you call directly keeps numbering until `reset()`.
+
+**Allow-lists.** `--keep-person NAME` (repeatable; Python: `Config(keep_people=(...))`) keeps a
+handle, a name or a full e-mail address, typically your own identities. Matching is exact and
+case-insensitive, and a leading `@` is ignored. An e-mail address keeps only that exact address,
+never its local part as a handle: anyone can register `someone@their-domain.example`. Bots, CI
+services, AI assistants and group mentions (`*[bot]`, `*-bot`, `dependabot`, `renovate`,
+`github-actions`, `claude`, `copilot`, `@here`, `@everyone` …) are always kept. `--keep-person`
+affects only the `person.*` rules; use `Config(email_keep_domains=...)` to keep addresses from
+`pii.email`.
+
+```python
+from redact_transcripts import Config, Redactor, redact_bytes
+
+out, report = redact_bytes(raw, format="claude-code", third_parties=True, keep_people=["my-login", "My Name"])
+
+redactor = Redactor(
+    config=Config(keep_people=("my-login",), person_template="<person {n}>"), third_parties=True
+)
+```
+
+The placeholder template must contain `{n}`, must not contain `@`, and must start with a
+punctuation character, so a placeholder can never be matched again: redacting twice gives the
+same result as redacting once.
+
 ## Rules
 
-`redact-transcripts --list-rules` prints them. Each match is replaced by `[REDACTED:<rule>]`.
+`redact-transcripts --list-rules` prints them (add `--third-parties` to include `person.*`). Each match is replaced by `[REDACTED:<rule>]`.
 
 | Rule | Catches |
 |---|---|
@@ -202,6 +258,30 @@ Known gaps, each pinned by a vector in [`vectors/known_misses.json`](vectors/kno
 
 It also has false positives on code: `token = get_token()` loses `get_token`, for example.
 
+### What the third-party pass misses
+
+`--third-parties` reduces how many other people a shared transcript names. It does **not** make a
+transcript anonymous, and it is no privacy or GDPR guarantee. Read the output before you share it.
+Known gaps (several are pinned in [`vectors/third_party.json`](vectors/third_party.json) as
+`known_miss`):
+
+- **names in running prose** ("I asked Marta Fakeova about it"): there is no name recognition, only context;
+- an `@handle` **alone on its line**, which looks like a decorator or annotation;
+- names without a field label, e.g. a `git log --format` line such as `a1b2c3d Fix (Jane Fakedoe, 3 days ago)`,
+  and lower-case multi-word names in prose headers (`jane fakedoe wrote:`);
+- **what people said**: quoted comment text (`> …` blocks, comment bodies) stays; only the
+  attribution goes;
+- links to issue, pull-request or chat threads are kept, although the page they point to names people;
+- a `"name"` field in JSON text is redacted only next to a login or e-mail field on the same line, or
+  when it looks like a capitalised full name;
+- names in other scripts and conventions are caught only in the contexts above, and a name split
+  across lines or JSON records is not caught;
+- e-mail addresses that `pii.email` already redacted are not numbered, so an address and a handle
+  of the same person are linked only when the address was kept.
+
+It also over-matches: `github.com/<org>` is redacted like a person's profile, and an ordinary word
+after `@` that is not on the built-in stop list ("meet me @fakecafe") becomes a placeholder.
+
 Performance: about 4–5 MB/s. The `auto`, `jsonl` and `claude-code` formats read the whole input
 into memory; `--format text` streams.
 
@@ -211,7 +291,8 @@ Review redacted output before you share it.
 
 `vectors/*.json` holds the corpus the test suite runs: `positive`, `negative` (must stay
 byte-identical), `split` (chunk and line boundaries), `encoded` (JSON-escaped, `\u` escapes,
-base64) and `known_misses`. Every secret in it is synthetic and marked `FAKE`/`EXAMPLE`. The corpus
+base64), `known_misses` and `third_party` (people, run with `--third-parties`). Every secret in it
+is synthetic and marked `FAKE`/`EXAMPLE`, and every person is fictional. The corpus
 is CC0, so copy it into any project. Format: [`vectors/README.md`](vectors/README.md).
 
 ## Development
@@ -236,7 +317,7 @@ Parts of this project were developed with AI assistance (Claude).
 
 - [ ] DCO GitHub App installed on the repository, private vulnerability reporting enabled, branch
       protection on `main`.
-- [ ] CI green on GitHub for Python 3.9-3.13; release date in CHANGELOG; tag `v0.1.0`; PyPI via
+- [ ] CI green on GitHub for Python 3.9-3.13; release date in CHANGELOG; tag `v<version>`; PyPI via
       trusted publishing.
 
 ## About
