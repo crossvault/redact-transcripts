@@ -239,6 +239,10 @@ Parts of this project were developed with AI assistance (Claude).
 - [ ] CI green on GitHub for Python 3.9-3.13; release date in CHANGELOG; tag `v0.1.0`; PyPI via
       trusted publishing.
 
+## About
+
+`redact-transcripts` is maintained by [crossVault GmbH](https://session-exchange.com), the team behind **a4sx** ([session-exchange.com](https://session-exchange.com)), a marketplace for AI agent work sessions. It grew out of the transcript scrubbing in our own agent tooling.
+
 ## License
 
 Code: [Apache-2.0](LICENSE), Copyright 2026 crossVault GmbH. Test vectors in `vectors/`:
