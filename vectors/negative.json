@@ -1,0 +1,391 @@
+{
+  "$schema_version": 1,
+  "category": "negative",
+  "vectors": [
+    {
+      "id": "max-tokens",
+      "description": "numeric value under a token-ish key",
+      "mode": "text",
+      "input": "max_tokens: 4096\n",
+      "expect": "unchanged"
+    },
+    {
+      "id": "tokenizer",
+      "description": "metadata key containing 'token'",
+      "mode": "text",
+      "input": "tokenizer: cl100k_base\n",
+      "expect": "unchanged"
+    },
+    {
+      "id": "token-type",
+      "description": "OAuth token_type field",
+      "mode": "text",
+      "input": "token_type: bearer\n",
+      "expect": "unchanged"
+    },
+    {
+      "id": "password-policy",
+      "description": "metadata key containing 'password'",
+      "mode": "text",
+      "input": "password_policy: strict\n",
+      "expect": "unchanged"
+    },
+    {
+      "id": "env-reference",
+      "description": "a variable reference, not a value",
+      "mode": "text",
+      "input": "token: ${GITHUB_TOKEN}\n",
+      "expect": "unchanged"
+    },
+    {
+      "id": "env-reference-bare",
+      "description": "bare $VAR reference",
+      "mode": "text",
+      "input": "api_key = $API_KEY\n",
+      "expect": "unchanged"
+    },
+    {
+      "id": "placeholder",
+      "description": "an angle-bracket placeholder",
+      "mode": "text",
+      "input": "password: <your password>\n",
+      "expect": "unchanged"
+    },
+    {
+      "id": "masked",
+      "description": "an already-masked value",
+      "mode": "text",
+      "input": "password: ********\n",
+      "expect": "unchanged"
+    },
+    {
+      "id": "comparison",
+      "description": "code comparing a token to null",
+      "mode": "text",
+      "input": "if (token == null) return;\n",
+      "expect": "unchanged"
+    },
+    {
+      "id": "prose-password",
+      "description": "the word password in prose",
+      "mode": "text",
+      "input": "Reset your password from the settings page.\n",
+      "expect": "unchanged"
+    },
+    {
+      "id": "loopback",
+      "description": "loopback address",
+      "mode": "text",
+      "input": "curl http://127.0.0.1:8080/health\n",
+      "expect": "unchanged"
+    },
+    {
+      "id": "version-four-part",
+      "description": "a four-part version that is not an address",
+      "mode": "text",
+      "input": "build 10.0.22631.2861 installed\n",
+      "expect": "unchanged"
+    },
+    {
+      "id": "version-three-part",
+      "description": "semantic version",
+      "mode": "text",
+      "input": "version 1.2.3\n",
+      "expect": "unchanged"
+    },
+    {
+      "id": "octet-over-255",
+      "description": "dotted quad with an octet over 255",
+      "mode": "text",
+      "input": "value 999.10.10.10\n",
+      "expect": "unchanged"
+    },
+    {
+      "id": "example-email",
+      "description": "documentation e-mail domain",
+      "mode": "text",
+      "input": "write to someone@example.com\n",
+      "expect": "unchanged"
+    },
+    {
+      "id": "no-tld-email",
+      "description": "user@localhost has no TLD",
+      "mode": "text",
+      "input": "mail user@localhost\n",
+      "expect": "unchanged"
+    },
+    {
+      "id": "decorator",
+      "description": "Python decorator, not an e-mail",
+      "mode": "text",
+      "input": "@dataclass(frozen=True)\n",
+      "expect": "unchanged"
+    },
+    {
+      "id": "short-sk",
+      "description": "sk- prefix but far too short",
+      "mode": "text",
+      "input": "flag sk-abc\n",
+      "expect": "unchanged"
+    },
+    {
+      "id": "short-ghp",
+      "description": "ghp_ prefix but too short",
+      "mode": "text",
+      "input": "branch ghp_abc123\n",
+      "expect": "unchanged"
+    },
+    {
+      "id": "aws-lowercase",
+      "description": "AKIA prefix with lowercase tail",
+      "mode": "text",
+      "input": "AKIAfake0000example0\n",
+      "expect": "unchanged"
+    },
+    {
+      "id": "aws-too-short",
+      "description": "AKIA prefix, 12 characters",
+      "mode": "text",
+      "input": "AKIAFAKE0000\n",
+      "expect": "unchanged"
+    },
+    {
+      "id": "short-jwt",
+      "description": "eyJ prefix without three segments",
+      "mode": "text",
+      "input": "eyJhbGciOiJub25lIn0\n",
+      "expect": "unchanged"
+    },
+    {
+      "id": "git-sha",
+      "description": "a 40-hex git commit id",
+      "mode": "text",
+      "input": "commit 3f786850e387550fdab836ed7e6dc881de23001b\n",
+      "expect": "unchanged"
+    },
+    {
+      "id": "sha256",
+      "description": "a 64-hex digest",
+      "mode": "text",
+      "input": "sha256 2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae\n",
+      "expect": "unchanged"
+    },
+    {
+      "id": "uuid",
+      "description": "a UUID",
+      "mode": "text",
+      "input": "id 123e4567-e89b-42d3-a456-426614174000\n",
+      "expect": "unchanged"
+    },
+    {
+      "id": "base64-benign",
+      "description": "base64 of harmless text",
+      "mode": "text",
+      "input": "data aGVsbG8gd29ybGQsIG5vdGhpbmcgc2VjcmV0IGhlcmU=\n",
+      "expect": "unchanged"
+    },
+    {
+      "id": "bearer-word",
+      "description": "the word Bearer without a token",
+      "mode": "text",
+      "input": "use the Bearer scheme\n",
+      "expect": "unchanged"
+    },
+    {
+      "id": "redacted-marker",
+      "description": "already redacted output stays stable",
+      "mode": "text",
+      "input": "token=[REDACTED:secret.assignment]\n",
+      "expect": "unchanged"
+    },
+    {
+      "id": "unix-path",
+      "description": "a long path is not base64",
+      "mode": "text",
+      "input": "/usr/lib/python3/dist-packages/setuptools/command/build\n",
+      "expect": "unchanged"
+    },
+    {
+      "id": "claude-code-coauthor",
+      "description": "commit trailer kept in the claude-code format",
+      "mode": "claude-code",
+      "input": "{\"type\":\"user\",\"sessionId\":\"00000000-0000-4000-8000-000000000001\",\"uuid\":\"00000000-0000-4000-8000-000000000001\",\"parentUuid\":null,\"timestamp\":\"2026-01-01T00:00:01Z\",\"message\":{\"role\":\"user\",\"content\":\"Co-Authored-By: Claude <noreply@anthropic.com>\"}}\n",
+      "expect": "unchanged"
+    },
+    {
+      "id": "claude-code-structure",
+      "description": "structural ids that look like tokens are kept",
+      "mode": "claude-code",
+      "input": "{\"type\":\"user\",\"sessionId\":\"00000000-0000-4000-8000-000000000001\",\"uuid\":\"00000000-0000-4000-8000-000000000002\",\"parentUuid\":null,\"timestamp\":\"2026-01-01T00:00:02Z\",\"message\":{\"role\":\"user\",\"content\":\"hello\"},\"requestId\":\"req_FAKEEXAMPLE0000000000000000\"}\n",
+      "expect": "unchanged"
+    },
+    {
+      "id": "jsonl-max-tokens",
+      "description": "JSON metadata key with a string value",
+      "mode": "jsonl",
+      "input": "{\"tokenizer\": \"bpe\", \"max_tokens\": \"4096\"}\n",
+      "expect": "unchanged"
+    },
+    {
+      "id": "authorization-scheme-only",
+      "description": "an Authorization header with a scheme and no credential",
+      "mode": "text",
+      "input": "Authorization: token\n",
+      "expect": "unchanged"
+    },
+    {
+      "id": "authorization-short",
+      "description": "a credential-like word shorter than 8 characters",
+      "mode": "text",
+      "input": "Authorization: token abc\n",
+      "expect": "unchanged"
+    },
+    {
+      "id": "token-auth-prose",
+      "description": "token scheme mentioned in prose",
+      "mode": "text",
+      "input": "Use token auth for the API.\n",
+      "expect": "unchanged"
+    },
+    {
+      "id": "quoted-placeholder",
+      "description": "a quoted placeholder value",
+      "mode": "text",
+      "input": "password = \"<your password>\"\n",
+      "expect": "unchanged"
+    },
+    {
+      "id": "quoted-env-ref",
+      "description": "a quoted environment reference",
+      "mode": "text",
+      "input": "api_key: \"${API_KEY}\"\n",
+      "expect": "unchanged"
+    },
+    {
+      "id": "short-number",
+      "description": "a short number under a secret-ish key",
+      "mode": "text",
+      "input": "pwd: 0\n",
+      "expect": "unchanged"
+    },
+    {
+      "id": "port-number",
+      "description": "a port is not a password",
+      "mode": "text",
+      "input": "port: 5432\n",
+      "expect": "unchanged"
+    },
+    {
+      "id": "password-length",
+      "description": "numeric metadata under a password key",
+      "mode": "text",
+      "input": "password_length: 16\n",
+      "expect": "unchanged"
+    },
+    {
+      "id": "token-ttl",
+      "description": "numeric metadata under a token key",
+      "mode": "text",
+      "input": "token_ttl: 3600\n",
+      "expect": "unchanged"
+    },
+    {
+      "id": "ssh-git-user",
+      "description": "the git@ user of an SSH remote is not a token",
+      "mode": "text",
+      "input": "git clone ssh://git@git.example.net/team/repo.git\n",
+      "expect": "unchanged"
+    },
+    {
+      "id": "url-short-user",
+      "description": "a short user name before @ in a URL",
+      "mode": "text",
+      "input": "https://deploy@git.example.com/r\n",
+      "expect": "unchanged"
+    },
+    {
+      "id": "url-dotted-user",
+      "description": "a dotted user name before @ in a URL (no token shape)",
+      "mode": "text",
+      "input": "https://first.last.name0001@git.example.com/r\n",
+      "expect": "unchanged"
+    },
+    {
+      "id": "url-letters-only-user",
+      "description": "a long all-letter user name in a URL",
+      "mode": "text",
+      "input": "https://deploymentbotaccount@git.example.com/r\n",
+      "expect": "unchanged"
+    },
+    {
+      "id": "jsonl-numeric-metadata",
+      "description": "numbers under metadata keys",
+      "mode": "jsonl",
+      "input": "{\"max_tokens\": 4096, \"password_length\": 16, \"tokensUsed\": 12345, \"port\": 5432}\n",
+      "expect": "unchanged"
+    },
+    {
+      "id": "claude-code-shaped-structure",
+      "description": "structural values with their expected shapes are kept",
+      "mode": "claude-code",
+      "input": "{\"type\":\"assistant\",\"sessionId\":\"00000000-0000-4000-8000-000000000001\",\"uuid\":\"00000000-0000-4000-8000-000000000006\",\"parentUuid\":null,\"timestamp\":\"2026-01-01T00:00:06Z\",\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"tool_use\",\"id\":\"toolu_FAKE04\",\"name\":\"Read\",\"input\":{\"file_path\":\"README.md\"}}]},\"requestId\":\"req_FAKE0001\",\"version\":\"2.0.14\"}\n",
+      "expect": "unchanged"
+    },
+    {
+      "id": "counter-tokens-used",
+      "description": "camelCase token counter",
+      "mode": "text",
+      "input": "tokensUsed: 12345\n",
+      "expect": "unchanged"
+    },
+    {
+      "id": "counter-tokens-used-snake",
+      "description": "snake_case token counter",
+      "mode": "text",
+      "input": "tokens_used=12345\n",
+      "expect": "unchanged"
+    },
+    {
+      "id": "counter-secret-count",
+      "description": "a count of secrets",
+      "mode": "text",
+      "input": "secretCount: 4096\n",
+      "expect": "unchanged"
+    },
+    {
+      "id": "counter-password-attempts",
+      "description": "a retry counter under a password key",
+      "mode": "text",
+      "input": "password_attempts: 1000\n",
+      "expect": "unchanged"
+    },
+    {
+      "id": "counter-token-numeric",
+      "description": "digits under a token key are not a token",
+      "mode": "text",
+      "input": "token: 12345678\n",
+      "expect": "unchanged"
+    },
+    {
+      "id": "pin-substring-mapping",
+      "description": "pin as a substring of another word",
+      "mode": "text",
+      "input": "mapping: 1234\n",
+      "expect": "unchanged"
+    },
+    {
+      "id": "pin-substring-spinner",
+      "description": "pin as a substring of another word",
+      "mode": "text",
+      "input": "spinner=5000\n",
+      "expect": "unchanged"
+    },
+    {
+      "id": "jsonl-counters",
+      "description": "numeric counters and metrics in JSON",
+      "mode": "jsonl",
+      "input": "{\"tokensUsed\": 12345, \"inputTokens\": 4096, \"secretCount\": 1200, \"passwordAttempts\": 1000, \"token_count\": 2048, \"cacheReadTokens\": 99999}\n",
+      "expect": "unchanged"
+    }
+  ]
+}

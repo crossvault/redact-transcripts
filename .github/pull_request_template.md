@@ -1,0 +1,3 @@
+- [ ] Commits are signed off (`git commit -s`, see CONTRIBUTING.md)
+- [ ] Tests / vectors added; any secret in them is synthetic and marked FAKE or EXAMPLE
+- [ ] CHANGELOG.md updated under *Unreleased*

@@ -1,0 +1,102 @@
+{
+  "$schema_version": 1,
+  "category": "encoded",
+  "vectors": [
+    {
+      "id": "double-encoded-json",
+      "description": "a JSON document stored as a JSON string (tool output)",
+      "mode": "claude-code",
+      "input": "{\"type\":\"user\",\"sessionId\":\"00000000-0000-4000-8000-000000000001\",\"uuid\":\"00000000-0000-4000-8000-000000000004\",\"parentUuid\":null,\"timestamp\":\"2026-01-01T00:00:04Z\",\"message\":{\"role\":\"user\",\"content\":[{\"type\":\"tool_result\",\"tool_use_id\":\"toolu_FAKE02\",\"content\":\"{\\\"api_key\\\": \\\"FAKE-EXAMPLE-api-key\\\"}\"}]}}\n",
+      "expect": "redacted",
+      "rules": [
+        "secret.assignment"
+      ],
+      "absent": [
+        "FAKE-EXAMPLE-api-key"
+      ]
+    },
+    {
+      "id": "escaped-json-in-text",
+      "description": "backslash-escaped JSON in a plain log",
+      "mode": "text",
+      "input": "{\\\"password\\\":\\\"FAKE-hunter2\\\"}\n",
+      "expect": "redacted",
+      "rules": [
+        "secret.assignment"
+      ],
+      "absent": [
+        "FAKE-hunter2"
+      ],
+      "output": "{\\\"password\\\":\\\"[REDACTED:secret.assignment]\\\"}\n"
+    },
+    {
+      "id": "unicode-escaped",
+      "description": "a token hidden behind a \\u escape in raw JSON",
+      "mode": "jsonl",
+      "input": "{\"msg\":\"token \\u0067hp_FAKEEXAMPLE000000000000000000000000\"}\n",
+      "expect": "redacted",
+      "rules": [
+        "secret.github_token"
+      ],
+      "absent": [
+        "ghp_FAKEEXAMPLE000000000000000000000000"
+      ]
+    },
+    {
+      "id": "base64-token",
+      "description": "a token, base64-encoded",
+      "mode": "text",
+      "input": "blob Z2hwX0ZBS0VFWEFNUExFMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAw\n",
+      "expect": "redacted",
+      "rules": [
+        "secret.base64_encoded"
+      ],
+      "absent": [
+        "Z2hwX0ZBS0VFWEFNUExFMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAw"
+      ],
+      "decodes_to": "ghp_FAKEEXAMPLE000000000000000000000000"
+    },
+    {
+      "id": "base64-k8s-secret",
+      "description": "Kubernetes-style base64 of a password assignment",
+      "mode": "text",
+      "input": "  data: cGFzc3dvcmQ9RkFLRS1FWEFNUExFLWh1bnRlcjI=\n",
+      "expect": "redacted",
+      "rules": [
+        "secret.base64_encoded"
+      ],
+      "absent": [
+        "cGFzc3dvcmQ9RkFLRS1FWEFNUExFLWh1bnRlcjI="
+      ],
+      "decodes_to": "password=FAKE-EXAMPLE-hunter2"
+    },
+    {
+      "id": "base64-env-file",
+      "description": "a base64-encoded .env file",
+      "mode": "text",
+      "input": "ENVFILE QVdTX0FDQ0VTU19LRVlfSUQ9QUtJQUZBS0UwMDAwRVhBTVBMRTAKUkVHSU9OPWV1LWNlbnRyYWwtMQo=\n",
+      "expect": "redacted",
+      "rules": [
+        "secret.base64_encoded"
+      ],
+      "absent": [
+        "QVdTX0FDQ0VTU19LRVlfSUQ9QUtJQUZBS0UwMDAwRVhBTVBMRTAKUkVHSU9OPWV1LWNlbnRyYWwtMQo="
+      ],
+      "decodes_to": "AKIAFAKE0000EXAMPLE0"
+    },
+    {
+      "id": "basic-auth",
+      "description": "HTTP Basic credentials",
+      "mode": "text",
+      "input": "Authorization: Basic ZXhhbXBsZS11c2VyOkZBS0UtUEFTU1dPUkQ=\n",
+      "expect": "redacted",
+      "rules": [
+        "secret.basic_auth"
+      ],
+      "absent": [
+        "ZXhhbXBsZS11c2VyOkZBS0UtUEFTU1dPUkQ="
+      ],
+      "decodes_to": "example-user:FAKE-PASSWORD"
+    }
+  ]
+}

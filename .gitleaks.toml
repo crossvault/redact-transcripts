@@ -1,0 +1,15 @@
+# The test corpus, tests, README and example contain deliberately synthetic secret shapes.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "synthetic test vectors (all marked FAKE/EXAMPLE)"
+paths = [
+  '''^vectors/.*\.json$''',
+  '''^tests/.*\.py$''',
+  '''^examples/.*''',
+  '''^README\.md$''',
+  '''^CHANGELOG\.md$''',
+  '''^src/redact_transcripts/.*\.py$''',
+  '''(^|/)__pycache__/''',
+]

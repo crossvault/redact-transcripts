@@ -1,0 +1,61 @@
+# SPDX-FileCopyrightText: 2026 crossVault GmbH
+# SPDX-License-Identifier: Apache-2.0
+
+[build-system]
+requires = ["hatchling>=1.21"]
+build-backend = "hatchling.build"
+
+[project]
+name = "redact-transcripts"
+version = "0.1.0"
+description = "Redact secrets and personal data from AI-agent transcripts, JSONL logs and text, without breaking their structure."
+readme = "README.md"
+requires-python = ">=3.9"
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE", "LICENSES/*"]
+authors = [{ name = "crossVault GmbH" }]
+keywords = ["redaction", "secrets", "jsonl", "transcripts", "claude-code", "privacy", "dlp"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Topic :: Security",
+    "Typing :: Typed",
+]
+dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/crossvault/redact-transcripts"
+Source = "https://github.com/crossvault/redact-transcripts"
+Issues = "https://github.com/crossvault/redact-transcripts/issues"
+Changelog = "https://github.com/crossvault/redact-transcripts/blob/main/CHANGELOG.md"
+
+[project.optional-dependencies]
+test = ["pytest>=7"]
+dev = ["pytest>=7", "ruff>=0.16,<0.17", "reuse[charset-normalizer]>=4"]
+
+[project.scripts]
+redact-transcripts = "redact_transcripts.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/redact_transcripts"]
+
+[tool.hatch.build.targets.sdist]
+include = ["src", "tests", "vectors", "LICENSES", "LICENSE", "NOTICE", "README.md", "CHANGELOG.md", "REUSE.toml"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests", "src"]
+pythonpath = ["src"]
+addopts = "-q --doctest-modules --import-mode=importlib"
+
+[tool.ruff]
+line-length = 110
+target-version = "py39"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "RUF"]
+ignore = ["UP006", "UP007", "UP035", "UP037", "UP045", "RUF022"]

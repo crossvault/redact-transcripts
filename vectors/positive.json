@@ -1,0 +1,614 @@
+{
+  "$schema_version": 1,
+  "category": "positive",
+  "vectors": [
+    {
+      "id": "anthropic-key",
+      "description": "secret.anthropic_key shape in prose",
+      "mode": "text",
+      "input": "here it is: sk-ant-api03-FAKE-EXAMPLE-0000000000 ok\n",
+      "expect": "redacted",
+      "rules": [
+        "secret.anthropic_key"
+      ],
+      "absent": [
+        "sk-ant-api03-FAKE-EXAMPLE-0000000000"
+      ],
+      "output": "here it is: [REDACTED:secret.anthropic_key] ok\n"
+    },
+    {
+      "id": "openai-project-key",
+      "description": "secret.openai_key shape in prose",
+      "mode": "text",
+      "input": "here it is: sk-proj-FAKEEXAMPLE00000000000000 ok\n",
+      "expect": "redacted",
+      "rules": [
+        "secret.openai_key"
+      ],
+      "absent": [
+        "sk-proj-FAKEEXAMPLE00000000000000"
+      ],
+      "output": "here it is: [REDACTED:secret.openai_key] ok\n"
+    },
+    {
+      "id": "github-classic-pat",
+      "description": "secret.github_token shape in prose",
+      "mode": "text",
+      "input": "here it is: ghp_FAKEEXAMPLE000000000000000000000000 ok\n",
+      "expect": "redacted",
+      "rules": [
+        "secret.github_token"
+      ],
+      "absent": [
+        "ghp_FAKEEXAMPLE000000000000000000000000"
+      ],
+      "output": "here it is: [REDACTED:secret.github_token] ok\n"
+    },
+    {
+      "id": "github-fine-grained-pat",
+      "description": "secret.github_token shape in prose",
+      "mode": "text",
+      "input": "here it is: github_pat_FAKEEXAMPLE_00000000000000000000 ok\n",
+      "expect": "redacted",
+      "rules": [
+        "secret.github_token"
+      ],
+      "absent": [
+        "github_pat_FAKEEXAMPLE_00000000000000000000"
+      ],
+      "output": "here it is: [REDACTED:secret.github_token] ok\n"
+    },
+    {
+      "id": "gitlab-pat",
+      "description": "secret.gitlab_token shape in prose",
+      "mode": "text",
+      "input": "here it is: glpat-FAKEEXAMPLE000000000 ok\n",
+      "expect": "redacted",
+      "rules": [
+        "secret.gitlab_token"
+      ],
+      "absent": [
+        "glpat-FAKEEXAMPLE000000000"
+      ],
+      "output": "here it is: [REDACTED:secret.gitlab_token] ok\n"
+    },
+    {
+      "id": "slack-bot-token",
+      "description": "secret.slack_token shape in prose",
+      "mode": "text",
+      "input": "here it is: xoxb-0000000000-FAKEEXAMPLE ok\n",
+      "expect": "redacted",
+      "rules": [
+        "secret.slack_token"
+      ],
+      "absent": [
+        "xoxb-0000000000-FAKEEXAMPLE"
+      ],
+      "output": "here it is: [REDACTED:secret.slack_token] ok\n"
+    },
+    {
+      "id": "aws-access-key-id",
+      "description": "secret.aws_key_id shape in prose",
+      "mode": "text",
+      "input": "here it is: AKIAFAKE0000EXAMPLE0 ok\n",
+      "expect": "redacted",
+      "rules": [
+        "secret.aws_key_id"
+      ],
+      "absent": [
+        "AKIAFAKE0000EXAMPLE0"
+      ],
+      "output": "here it is: [REDACTED:secret.aws_key_id] ok\n"
+    },
+    {
+      "id": "aws-session-key-id",
+      "description": "secret.aws_key_id shape in prose",
+      "mode": "text",
+      "input": "here it is: ASIAFAKE0000EXAMPLE0 ok\n",
+      "expect": "redacted",
+      "rules": [
+        "secret.aws_key_id"
+      ],
+      "absent": [
+        "ASIAFAKE0000EXAMPLE0"
+      ],
+      "output": "here it is: [REDACTED:secret.aws_key_id] ok\n"
+    },
+    {
+      "id": "google-api-key",
+      "description": "secret.google_api_key shape in prose",
+      "mode": "text",
+      "input": "here it is: AIzaFAKE_EXAMPLE_0000000000000000000000 ok\n",
+      "expect": "redacted",
+      "rules": [
+        "secret.google_api_key"
+      ],
+      "absent": [
+        "AIzaFAKE_EXAMPLE_0000000000000000000000"
+      ],
+      "output": "here it is: [REDACTED:secret.google_api_key] ok\n"
+    },
+    {
+      "id": "stripe-test-key",
+      "description": "secret.stripe_key shape in prose",
+      "mode": "text",
+      "input": "here it is: sk_test_FAKEEXAMPLE00000000 ok\n",
+      "expect": "redacted",
+      "rules": [
+        "secret.stripe_key"
+      ],
+      "absent": [
+        "sk_test_FAKEEXAMPLE00000000"
+      ],
+      "output": "here it is: [REDACTED:secret.stripe_key] ok\n"
+    },
+    {
+      "id": "stripe-restricted-key",
+      "description": "secret.stripe_key shape in prose",
+      "mode": "text",
+      "input": "here it is: rk_test_FAKEEXAMPLE00000000 ok\n",
+      "expect": "redacted",
+      "rules": [
+        "secret.stripe_key"
+      ],
+      "absent": [
+        "rk_test_FAKEEXAMPLE00000000"
+      ],
+      "output": "here it is: [REDACTED:secret.stripe_key] ok\n"
+    },
+    {
+      "id": "jwt",
+      "description": "secret.jwt shape in prose",
+      "mode": "text",
+      "input": "here it is: eyJhbGciOiJub25lIn0.eyJzdWIiOiJGQUtFLUVYQU1QTEUifQ.FAKEEXAMPLEsignature ok\n",
+      "expect": "redacted",
+      "rules": [
+        "secret.jwt"
+      ],
+      "absent": [
+        "eyJhbGciOiJub25lIn0.eyJzdWIiOiJGQUtFLUVYQU1QTEUifQ.FAKEEXAMPLEsignature"
+      ],
+      "output": "here it is: [REDACTED:secret.jwt] ok\n"
+    },
+    {
+      "id": "private-key-block",
+      "description": "multi-line PEM private key block",
+      "mode": "text",
+      "input": "key:\n-----BEGIN PRIVATE KEY-----\nFAKEEXAMPLEFAKEEXAMPLEFAKEEXAMPLE\nNOTAREALKEYNOTAREALKEY\n-----END PRIVATE KEY-----\nafter\n",
+      "expect": "redacted",
+      "rules": [
+        "secret.private_key"
+      ],
+      "absent": [
+        "FAKEEXAMPLEFAKEEXAMPLE",
+        "NOTAREALKEY"
+      ],
+      "output": "key:\n[REDACTED:secret.private_key]\nafter\n"
+    },
+    {
+      "id": "private-key-unterminated",
+      "description": "BEGIN without END: redact to end of input",
+      "mode": "text",
+      "input": "paste:\n-----BEGIN RSA PRIVATE KEY-----\nFAKEEXAMPLETRUNCATED\n",
+      "expect": "redacted",
+      "rules": [
+        "secret.private_key"
+      ],
+      "absent": [
+        "FAKEEXAMPLETRUNCATED"
+      ],
+      "output": "paste:\n[REDACTED:secret.private_key]"
+    },
+    {
+      "id": "bearer-header",
+      "description": "Authorization header keeps the scheme",
+      "mode": "text",
+      "input": "Authorization: Bearer FAKE-EXAMPLE-0000-token\n",
+      "expect": "redacted",
+      "rules": [
+        "secret.bearer"
+      ],
+      "absent": [
+        "FAKE-EXAMPLE-0000-token"
+      ],
+      "output": "Authorization: Bearer [REDACTED:secret.bearer]\n"
+    },
+    {
+      "id": "url-credentials",
+      "description": "user:password in a connection URL",
+      "mode": "text",
+      "input": "psql postgres://app:FAKE-PASSWORD@db.example.net:5432/app\n",
+      "expect": "redacted",
+      "rules": [
+        "secret.url_credentials"
+      ],
+      "absent": [
+        "FAKE-PASSWORD"
+      ],
+      "output": "psql postgres://[REDACTED:secret.url_credentials]@db.example.net:5432/app\n"
+    },
+    {
+      "id": "cli-flag-space",
+      "description": "--password VALUE",
+      "mode": "text",
+      "input": "tool login --password FAKEpassw0rd\n",
+      "expect": "redacted",
+      "rules": [
+        "secret.cli_flag"
+      ],
+      "absent": [
+        "FAKEpassw0rd"
+      ]
+    },
+    {
+      "id": "cli-flag-equals",
+      "description": "--api-key=VALUE",
+      "mode": "text",
+      "input": "tool --api-key=FAKE-EXAMPLE-key\n",
+      "expect": "redacted",
+      "rules": [
+        "secret.cli_flag"
+      ],
+      "absent": [
+        "FAKE-EXAMPLE-key"
+      ]
+    },
+    {
+      "id": "smbclient-user-percent",
+      "description": "-U user%password",
+      "mode": "text",
+      "input": "smbclient -U example%FAKEpass //files.example.net/share\n",
+      "expect": "redacted",
+      "rules": [
+        "secret.user_percent_pass"
+      ],
+      "absent": [
+        "FAKEpass"
+      ]
+    },
+    {
+      "id": "env-export",
+      "description": "shell export of a password variable",
+      "mode": "text",
+      "input": "export DB_PASSWORD=FAKE-hunter2\n",
+      "expect": "redacted",
+      "rules": [
+        "secret.assignment"
+      ],
+      "absent": [
+        "FAKE-hunter2"
+      ],
+      "output": "export DB_PASSWORD=[REDACTED:secret.assignment]\n"
+    },
+    {
+      "id": "yaml-quoted",
+      "description": "YAML key with a quoted value",
+      "mode": "text",
+      "input": "client_secret: \"FAKE-EXAMPLE-secret\"\n",
+      "expect": "redacted",
+      "rules": [
+        "secret.assignment"
+      ],
+      "absent": [
+        "FAKE-EXAMPLE-secret"
+      ]
+    },
+    {
+      "id": "short-password",
+      "description": "a short but real-looking password value",
+      "mode": "text",
+      "input": "password=FAKE1\n",
+      "expect": "redacted",
+      "rules": [
+        "secret.assignment"
+      ],
+      "absent": [
+        "FAKE1"
+      ]
+    },
+    {
+      "id": "service-account-json",
+      "description": "service-account keyfile as JSONL",
+      "mode": "jsonl",
+      "input": "{\"type\": \"service_account\", \"private_key_id\": \"FAKEEXAMPLE0000\", \"private_key\": \"-----BEGIN PRIVATE KEY-----\\nFAKEEXAMPLEFAKEEXAMPLEFAKEEXAMPLE\\nNOTAREALKEYNOTAREALKEY\\n-----END PRIVATE KEY-----\", \"client_email\": \"robot@project.example.net\"}\n",
+      "expect": "redacted",
+      "rules": [
+        "secret.keyed_value"
+      ],
+      "absent": [
+        "FAKEEXAMPLEFAKEEXAMPLE",
+        "FAKEEXAMPLE0000"
+      ]
+    },
+    {
+      "id": "email",
+      "description": "a personal e-mail address",
+      "mode": "text",
+      "input": "ping jane.doe@mail.test about it\n",
+      "expect": "redacted",
+      "rules": [
+        "pii.email"
+      ],
+      "absent": [
+        "jane.doe@mail.test"
+      ]
+    },
+    {
+      "id": "ipv4",
+      "description": "a non-loopback IPv4 address",
+      "mode": "text",
+      "input": "ssh 203.0.113.42\n",
+      "expect": "redacted",
+      "rules": [
+        "infra.ipv4"
+      ],
+      "absent": [
+        "203.0.113.42"
+      ]
+    },
+    {
+      "id": "home-linux",
+      "description": "user name in a Linux home path",
+      "mode": "text",
+      "input": "open /home/jdoe/project\n",
+      "expect": "redacted",
+      "rules": [
+        "pii.home_dir"
+      ],
+      "absent": [
+        "jdoe"
+      ],
+      "output": "open /home/[USER]/project\n"
+    },
+    {
+      "id": "home-macos",
+      "description": "user name in a macOS home path",
+      "mode": "text",
+      "input": "open /Users/jdoe/project\n",
+      "expect": "redacted",
+      "rules": [
+        "pii.home_dir"
+      ],
+      "absent": [
+        "jdoe"
+      ]
+    },
+    {
+      "id": "home-windows",
+      "description": "user name in a Windows profile path",
+      "mode": "text",
+      "input": "open C:\\Users\\jdoe\\project\n",
+      "expect": "redacted",
+      "rules": [
+        "pii.home_dir"
+      ],
+      "absent": [
+        "jdoe"
+      ]
+    },
+    {
+      "id": "jsonl-keyed-value",
+      "description": "a JSON value under a secret-named key",
+      "mode": "jsonl",
+      "input": "{\"env\": {\"GITHUB_TOKEN\": \"plain-FAKE-value\"}}\n",
+      "expect": "redacted",
+      "rules": [
+        "secret.keyed_value"
+      ],
+      "absent": [
+        "plain-FAKE-value"
+      ]
+    },
+    {
+      "id": "jsonl-secret-in-key",
+      "description": "a secret used as an object key",
+      "mode": "jsonl",
+      "input": "{\"seen\": {\"ghp_FAKEEXAMPLE000000000000000000000000\": true}}\n",
+      "expect": "redacted",
+      "rules": [
+        "secret.github_token"
+      ],
+      "absent": [
+        "ghp_FAKEEXAMPLE000000000000000000000000"
+      ]
+    },
+    {
+      "id": "claude-code-tool-result",
+      "description": "a token printed in a tool result; ids stay",
+      "mode": "claude-code",
+      "input": "{\"type\":\"user\",\"sessionId\":\"00000000-0000-4000-8000-000000000001\",\"uuid\":\"00000000-0000-4000-8000-000000000001\",\"parentUuid\":null,\"timestamp\":\"2026-01-01T00:00:01Z\",\"message\":{\"role\":\"user\",\"content\":[{\"type\":\"tool_result\",\"tool_use_id\":\"toolu_FAKE01\",\"content\":\"AWS key AKIAFAKE0000EXAMPLE0\"}]}}\n",
+      "expect": "redacted",
+      "rules": [
+        "secret.aws_key_id"
+      ],
+      "absent": [
+        "AKIAFAKE0000EXAMPLE0"
+      ]
+    },
+    {
+      "id": "authorization-token-scheme",
+      "description": "Authorization header with the 'token' scheme (GitHub/Gitea style)",
+      "mode": "text",
+      "input": "curl -H \"Authorization: token FAKEEXAMPLE0000000000\" https://api.example.com\n",
+      "expect": "redacted",
+      "rules": [
+        "secret.auth_header"
+      ],
+      "absent": [
+        "FAKEEXAMPLE0000000000"
+      ],
+      "output": "curl -H \"Authorization: token [REDACTED:secret.auth_header]\" https://api.example.com\n"
+    },
+    {
+      "id": "authorization-apikey-json",
+      "description": "Authorization header in escaped JSON with an ApiKey scheme",
+      "mode": "text",
+      "input": "{\\\"Authorization\\\": \\\"ApiKey FAKE-EXAMPLE-key-0000\\\"}\n",
+      "expect": "redacted",
+      "rules": [
+        "secret.auth_header"
+      ],
+      "absent": [
+        "FAKE-EXAMPLE-key-0000"
+      ]
+    },
+    {
+      "id": "quoted-password-with-spaces",
+      "description": "double-quoted passphrase containing spaces",
+      "mode": "text",
+      "input": "password = \"FAKE hunter EXAMPLE\"\n",
+      "expect": "redacted",
+      "rules": [
+        "secret.assignment"
+      ],
+      "absent": [
+        "FAKE hunter EXAMPLE",
+        "hunter EXAMPLE"
+      ],
+      "output": "password = \"[REDACTED:secret.assignment]\"\n"
+    },
+    {
+      "id": "single-quoted-secret-with-spaces",
+      "description": "single-quoted value containing spaces",
+      "mode": "text",
+      "input": "client_secret: 'FAKE EXAMPLE words'\n",
+      "expect": "redacted",
+      "rules": [
+        "secret.assignment"
+      ],
+      "absent": [
+        "FAKE EXAMPLE words",
+        "EXAMPLE words"
+      ]
+    },
+    {
+      "id": "escaped-quoted-with-spaces",
+      "description": "backslash-escaped JSON value containing spaces",
+      "mode": "text",
+      "input": "{\\\"password\\\":\\\"FAKE two EXAMPLE\\\"}\n",
+      "expect": "redacted",
+      "rules": [
+        "secret.assignment"
+      ],
+      "absent": [
+        "FAKE two EXAMPLE",
+        "two EXAMPLE"
+      ]
+    },
+    {
+      "id": "numeric-password-text",
+      "description": "an all-digit password in an assignment (FAKE marker in the key)",
+      "mode": "text",
+      "input": "FAKE_DB_PASSWORD=40961234\n",
+      "expect": "redacted",
+      "rules": [
+        "secret.assignment"
+      ],
+      "absent": [
+        "FAKE_DB_PASSWORD=40961234"
+      ],
+      "output": "FAKE_DB_PASSWORD=[REDACTED:secret.assignment]\n"
+    },
+    {
+      "id": "numeric-password-json",
+      "description": "a numeric JSON value under a secret key",
+      "mode": "jsonl",
+      "input": "{\"FAKE_password\": 40961234, \"pin_FAKE_token\": [\"FAKE-1\", \"FAKE-2\"]}\n",
+      "expect": "redacted",
+      "rules": [
+        "secret.keyed_value"
+      ],
+      "absent": [
+        "40961234",
+        "FAKE-1",
+        "FAKE-2"
+      ]
+    },
+    {
+      "id": "url-token-userinfo",
+      "description": "a token as the whole userinfo of a git remote URL",
+      "mode": "text",
+      "input": "git clone https://FAKEEXAMPLEtoken0000@git.example.net/team/repo.git\n",
+      "expect": "redacted",
+      "rules": [
+        "secret.url_token"
+      ],
+      "absent": [
+        "FAKEEXAMPLEtoken0000"
+      ],
+      "output": "git clone https://[REDACTED:secret.url_token]@git.example.net/team/repo.git\n"
+    },
+    {
+      "id": "claude-code-secret-under-structural-key",
+      "description": "tokens under id/model/version/type inside a tool input",
+      "mode": "claude-code",
+      "input": "{\"type\":\"assistant\",\"sessionId\":\"00000000-0000-4000-8000-000000000001\",\"uuid\":\"00000000-0000-4000-8000-000000000005\",\"parentUuid\":null,\"timestamp\":\"2026-01-01T00:00:05Z\",\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"tool_use\",\"id\":\"toolu_FAKE03\",\"name\":\"mcp_tool\",\"input\":{\"id\":\"ghp_FAKEEXAMPLE000000000000000000000000\",\"model\":\"ghp_FAKEEXAMPLE000000000000000000000000\",\"version\":\"password=FAKE-hunter2\",\"type\":\"Bearer FAKE-EXAMPLE-0000-token\"}}]}}\n",
+      "expect": "redacted",
+      "rules": [
+        "secret.github_token",
+        "secret.assignment",
+        "secret.bearer"
+      ],
+      "absent": [
+        "ghp_FAKEEXAMPLE000000000000000000000000",
+        "FAKE-hunter2",
+        "FAKE-EXAMPLE-0000-token"
+      ]
+    },
+    {
+      "id": "numeric-pin-text",
+      "description": "a numeric PIN (FAKE marker in the key)",
+      "mode": "text",
+      "input": "FAKE_card_pin: 4711\n",
+      "expect": "redacted",
+      "rules": [
+        "secret.pin"
+      ],
+      "absent": [
+        "4711"
+      ],
+      "output": "FAKE_card_pin: [REDACTED:secret.pin]\n"
+    },
+    {
+      "id": "numeric-passcode-camel",
+      "description": "a camelCase passcode",
+      "mode": "text",
+      "input": "userPasscodeFAKE=887766\n",
+      "expect": "redacted",
+      "rules": [
+        "secret.pin"
+      ],
+      "absent": [
+        "887766"
+      ]
+    },
+    {
+      "id": "numeric-secret-text",
+      "description": "an all-digit client secret",
+      "mode": "text",
+      "input": "FAKE_client_secret: 99887766\n",
+      "expect": "redacted",
+      "rules": [
+        "secret.assignment"
+      ],
+      "absent": [
+        "99887766"
+      ]
+    },
+    {
+      "id": "numeric-secrets-json",
+      "description": "numeric PIN and password values in JSON (int and string)",
+      "mode": "jsonl",
+      "input": "{\"FAKE\": true, \"userPin\": 4321, \"deviceCode_pin\": \"8642\", \"db_password\": 40961234}\n",
+      "expect": "redacted",
+      "rules": [
+        "secret.keyed_value"
+      ],
+      "absent": [
+        "4321",
+        "8642",
+        "40961234"
+      ]
+    }
+  ]
+}

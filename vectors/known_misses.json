@@ -1,0 +1,83 @@
+{
+  "$schema_version": 1,
+  "category": "known_misses",
+  "vectors": [
+    {
+      "id": "split-across-records",
+      "description": "token halves in two JSONL records: each half is too short to match",
+      "mode": "jsonl",
+      "input": "{\"out\": \"ghp_FAKEEXAMP\"}\n{\"out\": \"LE000000000000000000000000\"}\n",
+      "expect": "known_miss"
+    },
+    {
+      "id": "split-across-lines",
+      "description": "token broken by a newline in plain text",
+      "mode": "text",
+      "input": "ghp_FAKEEXAMP\nLE000000000000000000000000\n",
+      "expect": "known_miss"
+    },
+    {
+      "id": "double-base64",
+      "description": "base64 of base64: only one level is decoded",
+      "mode": "text",
+      "input": "x WjJod1gwWkJTMFZGV0VGTlVFeEZNREF3TURBd01EQXdNREF3TURBd01EQXdNREF3TURBdw==\n",
+      "expect": "known_miss"
+    },
+    {
+      "id": "hex-encoded",
+      "description": "hex-encoded token",
+      "mode": "text",
+      "input": "x 6768705f46414b454558414d504c45303030303030303030303030303030303030303030303030\n",
+      "expect": "known_miss"
+    },
+    {
+      "id": "prose-secret",
+      "description": "a password stated in prose, without = or :",
+      "mode": "text",
+      "input": "the password is FAKE-hunter2\n",
+      "expect": "known_miss"
+    },
+    {
+      "id": "zero-width-split",
+      "description": "a zero-width space inside a token",
+      "mode": "text",
+      "input": "ghp_FAKEEXAMPLE​000000000000000000000000\n",
+      "expect": "known_miss"
+    },
+    {
+      "id": "hostname",
+      "description": "an internal hostname (hostnames are not a rule)",
+      "mode": "text",
+      "input": "deploy to build-07.corp.example.internal\n",
+      "expect": "known_miss"
+    },
+    {
+      "id": "urlsafe-base64",
+      "description": "URL-safe base64 of a token (only the standard alphabet is decoded)",
+      "mode": "text",
+      "input": "x -_9naHBfRkFLRUVYQU1QTEUwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA=\n",
+      "expect": "known_miss"
+    },
+    {
+      "id": "mysql-p-flag",
+      "description": "mysql -pPASSWORD (no separator)",
+      "mode": "text",
+      "input": "mysql -uroot -pFAKEpassword db\n",
+      "expect": "known_miss"
+    },
+    {
+      "id": "npm-token",
+      "description": "npm token shape is not in the rule table",
+      "mode": "text",
+      "input": "npm_FAKEEXAMPLE0000000000000000000000\n",
+      "expect": "known_miss"
+    },
+    {
+      "id": "double-escaped-json",
+      "description": "two levels of backslash escaping",
+      "mode": "text",
+      "input": "{\\\\\"password\\\\\":\\\\\"FAKE-x\\\\\"}\n",
+      "expect": "known_miss"
+    }
+  ]
+}

@@ -1,0 +1,117 @@
+{
+  "$schema_version": 1,
+  "category": "split",
+  "vectors": [
+    {
+      "id": "token-across-chunks",
+      "description": "a GitHub token cut in the middle by a chunk boundary",
+      "mode": "stream",
+      "chunks": [
+        "log: ghp_FAKEEXA",
+        "MPLE000000000000000000000000 done\n"
+      ],
+      "expect": "redacted",
+      "rules": [
+        "secret.github_token"
+      ],
+      "absent": [
+        "ghp_FAKEEXAMPLE000000000000000000000000"
+      ]
+    },
+    {
+      "id": "bearer-across-chunks",
+      "description": "the scheme and the token arrive in different chunks",
+      "mode": "stream",
+      "chunks": [
+        "Authorization: Bear",
+        "er FAKE-EXAMPLE-",
+        "0000-token\n"
+      ],
+      "expect": "redacted",
+      "rules": [
+        "secret.bearer"
+      ],
+      "absent": [
+        "FAKE-EXAMPLE-0000-token"
+      ]
+    },
+    {
+      "id": "pem-across-chunks",
+      "description": "a private key streamed one byte-run at a time",
+      "mode": "stream",
+      "chunks": [
+        "start\n-----BEGIN PRIVATE K",
+        "EY-----\nFAKEEXAMPLEFAKEEXAMPLEFAKEEXAMPL",
+        "E\nNOTAREALKEYNOTAREALKEY\n-----END PRIVATE KEY-----\nend\n"
+      ],
+      "expect": "redacted",
+      "rules": [
+        "secret.private_key"
+      ],
+      "absent": [
+        "FAKEEXAMPLEFAKEEXAMPLE",
+        "NOTAREALKEY"
+      ]
+    },
+    {
+      "id": "crlf",
+      "description": "CRLF line endings, token at the end of a line",
+      "mode": "stream",
+      "chunks": [
+        "a\r\nkey AKIAFA",
+        "KE0000EXAMPLE0\r\nb\r\n"
+      ],
+      "expect": "redacted",
+      "rules": [
+        "secret.aws_key_id"
+      ],
+      "absent": [
+        "AKIAFAKE0000EXAMPLE0"
+      ]
+    },
+    {
+      "id": "no-trailing-newline",
+      "description": "token in the last, unterminated line",
+      "mode": "stream",
+      "chunks": [
+        "x\nxoxb-0000000000-",
+        "FAKEEXAMPLE"
+      ],
+      "expect": "redacted",
+      "rules": [
+        "secret.slack_token"
+      ],
+      "absent": [
+        "xoxb-0000000000-FAKEEXAMPLE"
+      ]
+    },
+    {
+      "id": "jsonl-pem-raw-lines",
+      "description": "a raw PEM pasted between JSONL records spans several non-JSON lines",
+      "mode": "jsonl",
+      "input": "{\"n\": 1}\n-----BEGIN PRIVATE KEY-----\nFAKEEXAMPLEFAKEEXAMPLEFAKEEXAMPLE\nNOTAREALKEYNOTAREALKEY\n-----END PRIVATE KEY-----\n{\"n\": 2}\n",
+      "expect": "redacted",
+      "rules": [
+        "secret.private_key"
+      ],
+      "absent": [
+        "FAKEEXAMPLEFAKEEXAMPLE",
+        "NOTAREALKEY"
+      ],
+      "output": "{\"n\": 1}\n[REDACTED:secret.private_key]\n{\"n\": 2}\n"
+    },
+    {
+      "id": "jsonl-pem-in-string",
+      "description": "a PEM inside one JSON string (newlines escaped)",
+      "mode": "claude-code",
+      "input": "{\"type\":\"user\",\"sessionId\":\"00000000-0000-4000-8000-000000000001\",\"uuid\":\"00000000-0000-4000-8000-000000000003\",\"parentUuid\":null,\"timestamp\":\"2026-01-01T00:00:03Z\",\"message\":{\"role\":\"user\",\"content\":\"cat key.pem\\n-----BEGIN PRIVATE KEY-----\\nFAKEEXAMPLEFAKEEXAMPLEFAKEEXAMPLE\\nNOTAREALKEYNOTAREALKEY\\n-----END PRIVATE KEY-----\"}}\n",
+      "expect": "redacted",
+      "rules": [
+        "secret.private_key"
+      ],
+      "absent": [
+        "FAKEEXAMPLEFAKEEXAMPLE"
+      ]
+    }
+  ]
+}
