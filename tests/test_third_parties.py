@@ -184,6 +184,59 @@ def test_people_class_directly():
     assert p.placeholder("someone-fake") == "[PERSON-1]"
 
 
+# --- prose that merely contains code words (review of 0.2.0) -------------------------------
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        "UPDATE: thanks @fakeuser for the fix",
+        "DELETE this later, thanks @fakeuser",
+        "Thanks @fakeuser, SET as default",
+        "FROM the thread, @fakeuser said",
+        "SELECT the best option, as @fakeuser said FROM experience",
+        "more context from @fakeuser below",
+        "code review by @fakeuser",
+        "open question for @fakeuser",
+        "file a bug and ping @fakeuser",
+        "find @fakeuser on chat",
+        "rm the stale branch, thanks @fakeuser",
+        "thanks @fake.user!",
+        "hi @fakeuser.bsky.social",
+    ],
+)
+def test_mentions_on_prose_lines_with_code_words(line):
+    out = tp(line)
+    assert "fakeuser" not in out and "fake.user" not in out, out
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        "SELECT * FROM t WHERE id = @id AND s = @status",
+        "UPDATE t SET a = @a WHERE id = @id",
+        "INSERT INTO t (a, b) VALUES (@a, @b);",
+        "DELETE FROM t WHERE owner IN (@owner)",
+        "DECLARE @total INT",
+        "EXEC dbo.report @year = 2026",
+        "ls @foo",
+        "ls -la @foo",
+        "$ cat -n @rules.txt | wc -l",
+        "$ more @notes.txt",
+        "cp a/b.txt @dest",
+        "Use the @login_required decorator",
+        "add `@shared_task` and `@SpringBootApplication`",
+        "the @fakescope scope",
+        "use @app.route to register",
+        "@implementation FakeView",
+        "@cursor please fix, @devin too",
+        "Python wrote: Traceback",
+    ],
+)
+def test_code_and_tools_stay(line):
+    assert tp(line) == line
+
+
 # --- command line ---------------------------------------------------------------------------
 
 
@@ -263,6 +316,15 @@ ADVERSARIAL = {
     "email-local-run": "fake." * 20 + "@example.com ",
     "discord": "<@" + "1" * 30,
     "commented": "fake commented on ",
+    "sql-select-run": "SELECT ",
+    "sql-mentions": "SELECT a FROM t WHERE x = @fake AND y = @fake ",
+    "sql-keyword-prose": "UPDATE: thanks @fake-user ",
+    "shell-paths": "ls a/b ",
+    "shell-path-mentions": "ls a.b @fake ",
+    "shell-prompt-flags": "$ more -n ",
+    "dotted-handles": "hi @fake.user.name.x ",
+    "dotted-decorator-calls": "x @app.route.get.post(",
+    "code-noun": "@fake-x decorator ",
 }
 SIZES = (8_000, 40_000, 200_000)
 LIMIT = 2.0  # seconds at 200 KB; a linear pass takes a small fraction of that

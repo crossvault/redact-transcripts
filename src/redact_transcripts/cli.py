@@ -86,7 +86,7 @@ def _parser() -> argparse.ArgumentParser:
         default=[],
         metavar="NAME",
         help="with --third-parties: never redact this handle, name or full e-mail address, e.g. "
-        "your own (repeatable)",
+        "your own (repeatable); affects person.* only, pii.email still redacts the address",
     )
     p.add_argument("--list-rules", action="store_true", help="list rule names and exit")
     p.add_argument("--version", action="version", version=f"%(prog)s {__version__}")

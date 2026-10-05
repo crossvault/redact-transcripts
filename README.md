@@ -115,7 +115,7 @@ for chunk in chunks:
 send(stream.close())
 ```
 
-## Third parties (opt-in)
+## Third parties (opt-in, since 0.2.0)
 
 A transcript also carries people who never agreed to be in it: a reviewer's `@handle`, a
 `Co-authored-by:` trailer, an `Author:` line from `git log`, a mail quote header, a `"login"` field
@@ -150,7 +150,8 @@ handle, a name or a full e-mail address, typically your own identities. Matching
 case-insensitive, and a leading `@` is ignored. An e-mail address keeps only that exact address,
 never its local part as a handle: anyone can register `someone@their-domain.example`. Bots, CI
 services, AI assistants and group mentions (`*[bot]`, `*-bot`, `dependabot`, `renovate`,
-`github-actions`, `claude`, `copilot`, `@here`, `@everyone` …) are always kept. `--keep-person`
+`github-actions`, `claude`, `copilot`, `cursor`, `devin`, `openhands`, `@here`, `@everyone` …)
+are always kept; add any other bot with `--keep-person`. `--keep-person`
 affects only the `person.*` rules; use `Config(email_keep_domains=...)` to keep addresses from
 `pii.email`.
 
@@ -270,7 +271,17 @@ Known gaps (several are pinned in [`vectors/third_party.json`](vectors/third_par
 - names without a field label, e.g. a `git log --format` line such as `a1b2c3d Fix (Jane Fakedoe, 3 days ago)`,
   and lower-case multi-word names in prose headers (`jane fakedoe wrote:`);
 - **what people said**: quoted comment text (`> …` blocks, comment bodies) stays; only the
-  attribution goes;
+  attribution goes. A stricter opt-in level that also removes quoted text may come later; it is
+  not part of `--third-parties`;
+- **other mentions of a person already found**: once `@fake-user` became `[PERSON-1]`, the same
+  login is *not* replaced elsewhere, e.g. in repository URLs (`github.com/fake-user/repo`,
+  `git@github.com:fake-user/repo.git`, gists), `owner/repo` strings and `"full_name"` fields, a
+  later `@fake-user` alone on its line, or a bare `fake-user` in prose or a table, so a reader can
+  often re-identify a placeholder;
+- **`Name <email>` outside a recognised header**: in `To:`, `Cc:`, `From:`, `Thanks-to:`,
+  `Reported by:` (with a space), author lists (`authors = ["Fake Person <…>"]`), a JSON
+  `"author": "Fake Person <…>"` value, or on a line of its own, the address goes (`pii.email`) but
+  the name stays; names of more than five words are not caught either;
 - links to issue, pull-request or chat threads are kept, although the page they point to names people;
 - a `"name"` field in JSON text is redacted only next to a login or e-mail field on the same line, or
   when it looks like a capitalised full name;
@@ -280,7 +291,14 @@ Known gaps (several are pinned in [`vectors/third_party.json`](vectors/third_par
   of the same person are linked only when the address was kept.
 
 It also over-matches: `github.com/<org>` is redacted like a person's profile, and an ordinary word
-after `@` that is not on the built-in stop list ("meet me @fakecafe") becomes a placeholder.
+after `@` that is not on the built-in stop list ("meet me @fakecafe") becomes a placeholder, as
+can a decorator, CSS at-rule or annotation that is not on the stop list when it is named in prose
+outside a code span. Lines that are SQL statements or shell commands keep `@word`s in parameter or
+file-argument position only.
+
+`--keep-person` never keeps an e-mail address from `pii.email`: your own address is still
+redacted (the safe direction). Keep a whole domain with `Config(email_keep_domains=...)` or turn
+the rule off with `--disable pii.email`.
 
 Performance: about 4–5 MB/s. The `auto`, `jsonl` and `claude-code` formats read the whole input
 into memory; `--format text` streams.

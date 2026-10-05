@@ -50,7 +50,10 @@ ts-ignore ts-expect-error ts-nocheck ts-check vite-ignore vitest-environment jes
 latest next beta canary alpha rc stable lts head
 staticmethod classmethod dataclass abstractmethod abstractproperty cached_property cache lru_cache
 wraps contextmanager asynccontextmanager pytest fixture mark parametrize patch app router
-validator field_validator model_validator root_validator computed_field total_ordering
+validator field_validator model_validator root_validator computed_field total_ordering validates
+shared_task login_required counter-style scope starting-style view-transition position-try
+implementation synthesize autoreleasepool end protocol optional required selector encode
+using code tracked action computed observer
 overload final unique singledispatch njit jit torch tf functools typing
 test before after beforeeach aftereach beforeall afterall autowired component injectable input
 output get post put delete entity column bean service controller configuration
@@ -88,7 +91,20 @@ DEFAULT_KEEP: FrozenSet[str] = frozenset(
         "claude",
         "codex",
         "copilot",
+        "copilot-swe-agent",
         "gemini",
+        "gemini-code-assist",
+        "cursor",
+        "cursoragent",
+        "devin",
+        "devin-ai",
+        "devin-ai-integration",
+        "openhands",
+        "openhands-agent",
+        "sourcery-ai",
+        "github actions",
+        "cursor agent",
+        "devin ai",
         "github",
         "github-actions",
         "dependabot",
@@ -148,6 +164,26 @@ _NAME_STOP = frozenset(
         "n/a",
         "tbd",
         "todo",
+        # tools and service accounts that show up in "X wrote:" lines and login fields
+        "python",
+        "bash",
+        "shell",
+        "node",
+        "terminal",
+        "console",
+        "output",
+        "stdout",
+        "stderr",
+        "root",
+        "admin",
+        "administrator",
+        "postgres",
+        "ubuntu",
+        "ec2-user",
+        "www-data",
+        "daemon",
+        "system",
+        "guest",
     }
 )
 
@@ -188,20 +224,45 @@ def normalize(identity: str) -> str:
 # `@` NOT preceded by a word char / `.` / `$` / `@` / `\` / `{` / `<` / `-`: that excludes
 # user@host, pkg@1.2.3, image@sha256, $@, {@link}, HEAD@{1}, <@id>. Then a letter-bearing handle
 # (at most 39 chars), not followed by what makes it code: `/x` (npm @scope/pkg; but `@a/@b` is two
-# people), `(` (decorator call), `.ident` (@app.route), `{` (BibTeX), an assignment.
+# people), `(` (decorator call), `{` (BibTeX), an assignment. A dotted handle (`@fake.user`,
+# `@name.bsky.social`) is allowed when nothing code-like follows it, so `@app.route(` stays code.
 _AT = re.compile(
-    r"(?<![\w.$@\\{<-])@(?=[\w-]{0,38}[^\W\d_])([^\W_][\w-]{0,38})"
+    r"(?<![\w.$@\\{<-])@(?=[\w-]{0,38}[^\W\d_])([^\W_][\w-]{0,38}(?:\.[^\W_][\w-]{0,38}){0,3})"
     r"(?![\w({@-]|/(?!@)|\.[^\W\d]|[ \t]{0,8}(?:=(?!=)|\|\|=|\+=))"
 )
-_CAMEL = re.compile(r"[a-z]+[A-Z]")  # lowerCamelCase: an identifier, not a handle
+# In a code span, `@` + an identifier with upper case, `_` or `.` is code (`@shared_task`,
+# `@SpringBootApplication`, `@dsCard`), not a handle.
+_CODE_IDENT = re.compile(r"[\w-]*[A-Z_.]")
+# The word after `@name` says what it is: "the @login_required decorator", "the @acme scope".
+_CODE_NOUN = re.compile(
+    r"[ \t]{1,4}(?:decorators?|annotations?|directives?|at-rules?|rules?|scopes?|packages?|macros?"
+    r"|attributes?|modifiers?)\b",
+    re.IGNORECASE,
+)
 _TIMESTAMP = re.compile(r"\d{4}-\d{2}")  # `@2026-09-30T13:35Z`: "at" a time
-# A shell command that takes FILE arguments (`ls @foo`): its `@word` is a path. Deliberately not
-# git/gh/echo/curl, whose arguments carry messages that can mention people.
-_CODE_LINE = re.compile(
-    r"^\s*(?:[$#%>]\s+)?(?:sudo\s+)?(?:ls|ll|cat|bat|cp|mv|rm|cd|find|fd|tar|zip|unzip|chmod|chown|mkdir"
-    r"|rmdir|touch|less|more|head|tail|stat|du|file|open|xdg-open|code|vim|vi|nano|scp|rsync|source|ln"
-    r"|wc|diff|tree)\b"
-    r"|\b(?:SELECT|INSERT|UPDATE|DELETE|WHERE|VALUES|DECLARE|EXEC|SET|FROM)\b"
+# A shell command that takes FILE arguments (`ls @foo`, `cat -n @rules.txt`): an `@word` in an
+# argument position right after the command (and its flags or paths) is a path. Verbs that are
+# also everyday words ("more", "open", "code" …) count only after a `$ ` prompt. Deliberately not
+# git/gh/echo/curl, whose arguments carry messages that can mention people. Matched against the
+# text before the `@` only, and only when that is short (bounded cost per match).
+_SHELL_ARGS = r"(?:[ \t]+(?:-\S{1,40}|[^\s/.]{0,80}[/.]\S{0,80}))*[ \t]+"
+_SHELL_PREFIX = re.compile(
+    r"[ \t]*(?:[$#%>][ \t]+)?(?:sudo[ \t]+)?(?:ls|ll|cat|bat|cp|mv|rm|cd|fd|tar|zip|unzip|chmod|chown"
+    r"|mkdir|rmdir|touch|stat|du|xdg-open|vim|vi|nano|scp|rsync|ln|wc)"
+    + _SHELL_ARGS
+    + r"|[ \t]*[$%][ \t]+(?:sudo[ \t]+)?(?:find|less|more|head|tail|file|open|code|source|diff|tree)"
+    + _SHELL_ARGS
+)
+_SHELL_MAX = 300
+# A SQL statement: two keywords in statement order on one line (a lone "UPDATE:" or "FROM the
+# thread" in prose is not SQL). Within it, only an `@name` in parameter position is kept.
+_SQL_LINE = re.compile(
+    r"\b(?:SELECT\b[^\n]{0,200}?\bFROM|UPDATE\b[^\n]{0,200}?\bSET|INSERT[ \t]+INTO|DELETE[ \t]+FROM"
+    r"|DECLARE[ \t]+@|EXEC(?:UTE)?[ \t]+\w[^\n]{0,200}?@)\b"
+)
+_SQL_PARAM_TAIL = re.compile(
+    r"(?:[=(,<>]|\b(?:AND|OR|IN|LIKE|BETWEEN|SET|DECLARE|EXEC|EXECUTE|VALUES|THEN|ELSE|WHEN|NOT|IS))[ \t]*\Z",
+    re.IGNORECASE,
 )
 # Discord mention markup `<@123…>` / `<@!123…>`.
 _DISCORD_MENTION = re.compile(r"(<@!?)(\d{15,22})(>)")
@@ -255,7 +316,7 @@ _JSON_LOGIN = re.compile(
 # clearly person-shaped full name is (2-4 capitalised letter-only tokens; "my-app", "Bash" stay).
 _JSON_NAME = re.compile(r'(\\?"name\\?"[ \t]*:[ \t]*\\?")(' + _WHO + r')(\\?")')
 _JSON_PERSON_CTX = re.compile(
-    r'"(?:login|email|author|committer|user|reviewer|assignee|owner|sender|creator|username|'
+    r'"(?:login|email|author|committer|user|reviewer|assignee|sender|creator|username|'
     r'avatar_url|global_name)\\?"[ \t]*:'
 )
 _FULL_NAME = re.compile(
@@ -375,7 +436,7 @@ class People:
         self.keep_defaults = keep_defaults
         self.enabled: FrozenSet[str] = frozenset(enabled)
         self._ids: Dict[str, int] = {}
-        self._code_line: Tuple[Optional[str], bool] = (None, False)
+        self._sql_line: Tuple[Optional[str], bool] = (None, False)
         rules: List[Tuple[str, "re.Pattern[str]", Callable[["re.Match[str]"], str], Tuple[str, ...]]] = [
             (PROFILE_URL, _PROFILE, self._profile, (".com/",)),
             (PROFILE_URL, _AT_PATH, self._url_handle, ("/@",)),
@@ -519,16 +580,22 @@ class People:
     def _discord_mention(self, m: "re.Match[str]") -> str:
         return m.group(1) + self.placeholder("discord:" + m.group(2)) + m.group(3)
 
-    def _is_code_line(self, line: str) -> bool:
-        cached, value = self._code_line
+    def _is_sql_line(self, line: str) -> bool:
+        cached, value = self._sql_line
         if cached is not line:
-            value = bool(_CODE_LINE.search(line))
-            self._code_line = (line, value)
+            value = bool(_SQL_LINE.search(line))
+            self._sql_line = (line, value)
         return value
 
     def _at(self, m: "re.Match[str]") -> str:
         login = m.group(1)
-        if login.lower() in _AT_STOP or self.is_kept(login) or _TIMESTAMP.match(login):
+        low = login.lower()
+        if (
+            low in _AT_STOP
+            or low.split(".", 1)[0] in _AT_STOP
+            or self.is_kept(login)
+            or _TIMESTAMP.match(login)
+        ):
             return m.group(0)
         s, start = m.string, m.start()
         first = len(s) - len(s.lstrip())
@@ -538,8 +605,10 @@ class People:
             rest = s[m.end() :].strip()
             if not rest or rest.startswith(("#", "//")):
                 return m.group(0)  # `@name` alone on its line: a decorator or annotation
-        if s[start - 1 : start] == "`" and _CAMEL.match(login):
-            return m.group(0)  # `` `@dsCard` ``: an identifier in a code span
+        if s[start - 1 : start] == "`" and _CODE_IDENT.match(login):
+            return m.group(0)  # `` `@shared_task` ``, `` `@dsCard` ``: an identifier in a code span
+        if _CODE_NOUN.match(s, m.end()):
+            return m.group(0)  # "the @login_required decorator", "the @fakescope scope"
         tail = s[max(0, start - 8) : start].rstrip()
         if tail.endswith(("<!--", "/*", "/**")):
             return m.group(0)  # `<!-- @foo -->`, `/** @foo */`
@@ -547,8 +616,10 @@ class People:
             return m.group(0)  # a doc-comment tag line: ` * @foo`
         if tail.endswith("=") or (tail.endswith("(") and tail[-2:-1].isalnum()):
             return m.group(0)  # `x = @id`, `fn(@x)`
-        if self._is_code_line(s):
-            return m.group(0)  # SQL `WHERE id = @id`; shell `ls @foo` (a path)
+        if start <= _SHELL_MAX and _SHELL_PREFIX.fullmatch(s, 0, start):
+            return m.group(0)  # shell `ls @foo`, `$ cat -n @rules.txt`: a path argument
+        if self._is_sql_line(s) and _SQL_PARAM_TAIL.search(s, max(0, start - 12), start):
+            return m.group(0)  # SQL `WHERE id = @id`, `VALUES (@a, @b)`
         return "@" + self.placeholder(login)
 
     def _email(self, m: "re.Match[str]") -> str:

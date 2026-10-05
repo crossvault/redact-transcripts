@@ -497,6 +497,159 @@
       "output": "{\"type\":\"user\",\"sessionId\":\"00000000-0000-4000-8000-000000000001\",\"uuid\":\"00000000-0000-4000-8000-000000000002\",\"parentUuid\":null,\"message\":{\"role\":\"user\",\"content\":[{\"type\":\"tool_result\",\"tool_use_id\":\"toolu_01EXAMPLE\",\"content\":\"author:\\t[PERSON-1]\\n--\\nPlease split this.\\nReviewed-by: [PERSON-2]\\nthanks @[PERSON-1]\"}]}}\n"
     },
     {
+      "id": "prose-with-sql-keyword",
+      "description": "an upper-case SQL word in prose does not make the line SQL",
+      "mode": "text",
+      "options": {
+        "third_parties": true
+      },
+      "input": "UPDATE: thanks @fakeuser for the fix\n",
+      "expect": "redacted",
+      "rules": [
+        "person.handle"
+      ],
+      "absent": [
+        "fakeuser"
+      ],
+      "output": "UPDATE: thanks @[PERSON-1] for the fix\n"
+    },
+    {
+      "id": "prose-with-set-keyword",
+      "description": "a lone SET in prose",
+      "mode": "text",
+      "options": {
+        "third_parties": true
+      },
+      "input": "Thanks @fakeuser, SET as default\n",
+      "expect": "redacted",
+      "rules": [
+        "person.handle"
+      ],
+      "absent": [
+        "fakeuser"
+      ],
+      "output": "Thanks @[PERSON-1], SET as default\n"
+    },
+    {
+      "id": "prose-from-keyword",
+      "description": "a lone FROM in prose",
+      "mode": "text",
+      "options": {
+        "third_parties": true
+      },
+      "input": "FROM the thread, @fakeuser said\n",
+      "expect": "redacted",
+      "rules": [
+        "person.handle"
+      ],
+      "absent": [
+        "fakeuser"
+      ],
+      "output": "FROM the thread, @[PERSON-1] said\n"
+    },
+    {
+      "id": "prose-starts-with-more",
+      "description": "a line starting with an everyday word that is also a shell command",
+      "mode": "text",
+      "options": {
+        "third_parties": true
+      },
+      "input": "more context from @fakeuser below\n",
+      "expect": "redacted",
+      "rules": [
+        "person.handle"
+      ],
+      "absent": [
+        "fakeuser"
+      ],
+      "output": "more context from @[PERSON-1] below\n"
+    },
+    {
+      "id": "prose-starts-with-code",
+      "description": "'code' at line start is prose without a $ prompt",
+      "mode": "text",
+      "options": {
+        "third_parties": true
+      },
+      "input": "code review by @fakeuser\n",
+      "expect": "redacted",
+      "rules": [
+        "person.handle"
+      ],
+      "absent": [
+        "fakeuser"
+      ],
+      "output": "code review by @[PERSON-1]\n"
+    },
+    {
+      "id": "prose-starts-with-open",
+      "description": "'open' at line start",
+      "mode": "text",
+      "options": {
+        "third_parties": true
+      },
+      "input": "open question for @fakeuser\n",
+      "expect": "redacted",
+      "rules": [
+        "person.handle"
+      ],
+      "absent": [
+        "fakeuser"
+      ],
+      "output": "open question for @[PERSON-1]\n"
+    },
+    {
+      "id": "prose-starts-with-find",
+      "description": "'find' followed by a handle, not a path",
+      "mode": "text",
+      "options": {
+        "third_parties": true
+      },
+      "input": "find @fakeuser on chat\n",
+      "expect": "redacted",
+      "rules": [
+        "person.handle"
+      ],
+      "absent": [
+        "fakeuser"
+      ],
+      "output": "find @[PERSON-1] on chat\n"
+    },
+    {
+      "id": "dotted-handle",
+      "description": "a dotted handle (Discord, Mastodon, Bluesky style)",
+      "mode": "text",
+      "options": {
+        "third_parties": true
+      },
+      "input": "thanks @fake.user!\n",
+      "expect": "redacted",
+      "rules": [
+        "person.handle"
+      ],
+      "absent": [
+        "fake.user"
+      ],
+      "output": "thanks @[PERSON-1]!\n"
+    },
+    {
+      "id": "dotted-domain-handle",
+      "description": "a domain-style handle",
+      "mode": "text",
+      "options": {
+        "third_parties": true
+      },
+      "input": "hi @fakeuser.bsky.social\n",
+      "expect": "redacted",
+      "rules": [
+        "person.handle"
+      ],
+      "absent": [
+        "fakeuser.bsky.social"
+      ],
+      "output": "hi @[PERSON-1]\n"
+    },
+    {
       "id": "tp-negative-decorator",
       "description": "code or a non-person: must stay byte-identical",
       "mode": "text",
@@ -734,6 +887,136 @@
         "third_parties": true
       },
       "input": "markers like `@dsCard` and `@cache`\n",
+      "expect": "unchanged"
+    },
+    {
+      "id": "tp-negative-sql-insert-values",
+      "description": "code or a non-person: must stay byte-identical",
+      "mode": "text",
+      "options": {
+        "third_parties": true
+      },
+      "input": "INSERT INTO t (a, b) VALUES (@a, @b);\n",
+      "expect": "unchanged"
+    },
+    {
+      "id": "tp-negative-sql-declare",
+      "description": "code or a non-person: must stay byte-identical",
+      "mode": "text",
+      "options": {
+        "third_parties": true
+      },
+      "input": "DECLARE @total INT\n",
+      "expect": "unchanged"
+    },
+    {
+      "id": "tp-negative-shell-prompt-more",
+      "description": "code or a non-person: must stay byte-identical",
+      "mode": "text",
+      "options": {
+        "third_parties": true
+      },
+      "input": "$ more @notes.txt\n",
+      "expect": "unchanged"
+    },
+    {
+      "id": "tp-negative-shell-flags-path",
+      "description": "code or a non-person: must stay byte-identical",
+      "mode": "text",
+      "options": {
+        "third_parties": true
+      },
+      "input": "$ cat -n @rules.txt | wc -l\n",
+      "expect": "unchanged"
+    },
+    {
+      "id": "tp-negative-decorator-named-in-prose",
+      "description": "code or a non-person: must stay byte-identical",
+      "mode": "text",
+      "options": {
+        "third_parties": true
+      },
+      "input": "Use the @login_required decorator\n",
+      "expect": "unchanged"
+    },
+    {
+      "id": "tp-negative-decorators-in-code-span",
+      "description": "code or a non-person: must stay byte-identical",
+      "mode": "text",
+      "options": {
+        "third_parties": true
+      },
+      "input": "add `@shared_task` and `@SpringBootApplication`\n",
+      "expect": "unchanged"
+    },
+    {
+      "id": "tp-negative-npm-scope-in-prose",
+      "description": "code or a non-person: must stay byte-identical",
+      "mode": "text",
+      "options": {
+        "third_parties": true
+      },
+      "input": "the @fakescope scope\n",
+      "expect": "unchanged"
+    },
+    {
+      "id": "tp-negative-dotted-decorator-in-prose",
+      "description": "code or a non-person: must stay byte-identical",
+      "mode": "text",
+      "options": {
+        "third_parties": true
+      },
+      "input": "use @app.route to register\n",
+      "expect": "unchanged"
+    },
+    {
+      "id": "tp-negative-css-counter-style",
+      "description": "code or a non-person: must stay byte-identical",
+      "mode": "text",
+      "options": {
+        "third_parties": true
+      },
+      "input": "@counter-style thumbs { system: cyclic; }\n",
+      "expect": "unchanged"
+    },
+    {
+      "id": "tp-negative-objc-implementation",
+      "description": "code or a non-person: must stay byte-identical",
+      "mode": "text",
+      "options": {
+        "third_parties": true
+      },
+      "input": "@implementation FakeView\n",
+      "expect": "unchanged"
+    },
+    {
+      "id": "tp-negative-agent-bots",
+      "description": "code or a non-person: must stay byte-identical",
+      "mode": "text",
+      "options": {
+        "third_parties": true
+      },
+      "input": "@cursor please fix, @devin too, @gemini-code-assist review\n",
+      "expect": "unchanged"
+    },
+    {
+      "id": "tp-negative-tool-wrote",
+      "description": "code or a non-person: must stay byte-identical",
+      "mode": "text",
+      "options": {
+        "third_parties": true
+      },
+      "input": "Python wrote: Traceback\n",
+      "expect": "unchanged"
+    },
+    {
+      "id": "tp-negative-service-account-login",
+      "description": "code or a non-person: must stay byte-identical",
+      "mode": "text",
+      "options": {
+        "third_parties": true
+      },
+      "input": "{\"username\": \"postgres\"}\n",
       "expect": "unchanged"
     },
     {

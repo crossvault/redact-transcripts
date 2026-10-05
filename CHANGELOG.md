@@ -19,6 +19,7 @@ All notable changes are listed here. The format follows
   full e-mail addresses; bots, CI services, AI assistants and group mentions are always kept.
 - `Config(person_template=...)` for the placeholder; `Redactor.reset()` starts a new transcript.
 - `vectors/third_party.json`: fictional people, code near-misses and known misses (CC0).
+- Dotted handles (`@fake.user`, `@name.bsky.social`) are recognised.
 - Timing tests at 8, 40 and 200 KB with adversarial inputs for every `person.*` pattern.
 
 ### Changed
