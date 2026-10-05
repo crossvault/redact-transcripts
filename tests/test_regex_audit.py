@@ -22,6 +22,9 @@ PATTERNS = {name: obj for name, obj in sorted(vars(people).items()) if isinstanc
 # Line starts that put a pattern into its "interesting" state.
 PREFIXES = [
     "",
+    "Author: Fake Person",
+    "fakeuser commented",
+    "Am 1.1.2026 schrieb",
     "ls",
     "$ more",
     "sudo cat",
@@ -87,6 +90,11 @@ UNITS = [
     " commented on ",
     "github.com/",
     "a.b/",
+    "a,      ",
+    "Ab      ",
+    "Ab  \t  wrote",
+    " " * 40 + "x",
+    "\t" * 20 + "<",
 ]
 SUFFIXES = ["", " (@x", ":", "!"]
 BYTE_SIZES = (8, 40, 200)

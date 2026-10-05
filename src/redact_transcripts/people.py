@@ -316,27 +316,27 @@ _DISCORD_USER = re.compile(
 _TRAILER = re.compile(
     r"^([ \t>*#/;-]{0,12}(?i:co-authored-by|signed-off-by|reviewed-by|acked-by|tested-by|reported-by"
     r"|suggested-by|helped-by|approved-by|requested-by|author|committer|reviewer)"
-    r"[ \t]{0,8}:[ \t]{1,8})(" + _WHO + r")([ \t]{0,8}<[^>\n]{0,200}>)?"
-    r"([ \t]{1,8}(?:#|//|--|/\*)[^\n]{0,200})?([ \t]{0,40}\r?\n?)$"
+    r"[ \t]{0,200}:[ \t]{1,200})(" + _WHO + r")([ \t]{0,200}<[^>\n]{0,200}>)?"
+    r"([ \t]{1,200}(?:#|//|--|/\*)[^\n]{0,200})?([ \t]{0,200}\r?\n?)$"
 )
 # `gh pr view --comments` style headers with a list of logins: `assignees:\talice, bob`.
 _GH_HEADER = re.compile(
-    r"^([ \t]{0,12}(?:author|reviewer|commenter|assignees?|reviewers?)[ \t]{0,8}:[ \t]{0,8})"
-    r"(" + _LOGIN + r"(?:,[ \t]{0,8}" + _LOGIN + r"){0,20})([ \t]{0,40}\r?\n?)$"
+    r"^([ \t]{0,12}(?:author|reviewer|commenter|assignees?|reviewers?)[ \t]{0,200}:[ \t]{0,200})"
+    r"(" + _LOGIN + r"(?:,[ \t]{0,200}" + _LOGIN + r"){0,20})([ \t]{0,200}\r?\n?)$"
 )
 # API JSON, also one level backslash-escaped: `"login": "alice"`, `"author_name": "…"`.
 _JSON_LOGIN = re.compile(
     r'(\\?"(?:login|username|user_name|author_name|committer_name|display_name|global_name|'
-    r'author|reviewer|assignee|committer|nickname|screen_name|handle)\\?"[ \t]{0,8}:[ \t]{0,8}\\?")('
+    r'author|reviewer|assignee|committer|nickname|screen_name|handle)\\?"[ \t]{0,200}:[ \t]{0,200}\\?")('
     + _WHO
     + r')(\\?")'
 )
 # JSON `"name": "…"` is a person next to person-shaped fields on the same line; otherwise only a
 # clearly person-shaped full name is (2-4 capitalised letter-only tokens; "my-app", "Bash" stay).
-_JSON_NAME = re.compile(r'(\\?"name\\?"[ \t]{0,8}:[ \t]{0,8}\\?")(' + _WHO + r')(\\?")')
+_JSON_NAME = re.compile(r'(\\?"name\\?"[ \t]{0,200}:[ \t]{0,200}\\?")(' + _WHO + r')(\\?")')
 _JSON_PERSON_CTX = re.compile(
     r'"(?:login|email|author|committer|user|reviewer|assignee|sender|creator|username|'
-    r'avatar_url|global_name)\\?"[ \t]{0,8}:'
+    r'avatar_url|global_name)\\?"[ \t]{0,200}:'
 )
 # Tokens are separated by exactly one space (optionally with a particle), so there is only one
 # way to split a name into tokens: no ambiguous repetition, linear time.
@@ -356,23 +356,26 @@ cache node python docker image upload download publish sync backup restore migra
 )
 # Web UI and mail headers: "alice commented on Oct 3", "Bob Example approved these changes".
 _UI_ACTION = re.compile(
-    r"^([ \t>*_-]{0,12})(" + _WHO + r")([ \t]{1,8}(?:(?:commented|reviewed)(?=[ \t]{1,8}(?:on[ \t]{1,8})?"
-    r"(?:[A-Z][a-z]{2}[ \t]{1,8}\d|\d{1,4}[ \t]{1,8}\w{1,12}[ \t]{1,8}ago|yesterday|last[ \t]|now\b|this\b))|"
+    r"^([ \t>*_-]{0,12})("
+    + _WHO
+    + r")([ \t]{1,200}(?:(?:commented|reviewed)(?=[ \t]{1,200}(?:on[ \t]{1,200})?"
+    r"(?:[A-Z][a-z]{2}[ \t]{1,200}\d|\d{1,12}[ \t]{1,200}\w{1,12}[ \t]{1,200}ago"
+    r"|yesterday|last[ \t]|now\b|this\b))|"
     r"approved these changes|requested changes|left a comment|left review comments|"
     r"requested a review|suggested changes|merged commit|merged \d+ commits?|closed this|"
     r"reopened this|opened this|mentioned this|added the \S+ label|self-assigned this)\b)"
 )
 # "On Tue, 29 Sep 2026, Bob <…> wrote:", "alice (Alice Example) wrote:", "Bob schrieb:".
 _WROTE = re.compile(
-    r"^([ \t>*_-]{0,12}(?:On [^\n]{3,80}?,[ \t]{0,8})?)("
+    r"^([ \t>*_-]{0,12}(?:On [^\n]{3,80}?,[ \t]{0,200})?)("
     + _WHO
-    + r")([ \t]{0,8})(<[^>\n]{0,200}>|\([^)\n]{0,120}\))?"
-    r"([ \t]{1,8}(?:wrote|commented|replied|schrieb|kommentierte|antwortete)[ \t]{0,8}:)"
+    + r")([ \t]{0,200})(<[^>\n]{0,200}>|\([^)\n]{0,120}\))?"
+    r"([ \t]{1,200}(?:wrote|commented|replied|schrieb|kommentierte|antwortete)[ \t]{0,200}:)"
 )
 # German mail clients put the verb first: "Am 29.09.2026 um 14:02 schrieb Bob <…>:".
 _SCHRIEB = re.compile(
-    r"^([ \t>*_-]{0,12}(?:Am [^\n]{3,80}?[ \t])?schrieb[ \t]{1,8})(" + _WHO + r")([ \t]{0,8})"
-    r"(<[^>\n]{0,200}>|\([^)\n]{0,120}\))?([ \t]{0,8}:)"
+    r"^([ \t>*_-]{0,12}(?:Am [^\n]{3,80}?[ \t])?schrieb[ \t]{1,200})(" + _WHO + r")([ \t]{0,200})"
+    r"(<[^>\n]{0,200}>|\([^)\n]{0,120}\))?([ \t]{0,200}:)"
 )
 # The same shape as the `pii.email` rule: only addresses that survived it reach this rule.
 _EMAIL = re.compile(
@@ -508,8 +511,11 @@ class People:
             return text
         lines = text.split("\n")
         for i, line in enumerate(lines):
-            if line:
-                lines[i] = self._line(line, counts)
+            # Match without trailing padding (terminal captures pad lines to the screen width,
+            # however wide), then put the padding back unchanged.
+            body = line.rstrip(" \t\r")
+            if body:
+                lines[i] = self._line(body, counts) + line[len(body) :]
         return "\n".join(lines)
 
     def _line(self, line: str, counts: Optional[Dict[str, int]]) -> str:

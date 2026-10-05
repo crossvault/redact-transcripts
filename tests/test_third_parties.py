@@ -237,6 +237,49 @@ def test_code_and_tools_stay(line):
     assert tp(line) == line
 
 
+# --- terminal padding and wide spacing (re-review 2 of 0.2.0) -----------------------------
+
+SP, TABS = " " * 120, "\t" * 9
+
+
+@pytest.mark.parametrize(
+    "line, gone",
+    [
+        ("Author: Fake Person" + SP, "Fake Person"),
+        ("Author: Fake Person <fp@corp.example>" + SP, "Fake Person"),
+        ("Author: Fake Person" + "\t" * 50 + "\r", "Fake Person"),
+        ("Author:" + " " * 12 + "Fake Person", "Fake Person"),
+        ("Co-authored-by:" + TABS + "Fake Person <fp@corp.example>", "Fake Person"),
+        ("Signed-off-by: Fake Person" + " " * 20 + "<fp@corp.example>" + SP, "Fake Person"),
+        ("assignees:" + " " * 12 + "fakeuser", "fakeuser"),
+        ("assignees: fake-one," + " " * 12 + "fake-two" + SP, "fake-two"),
+        ('"login":' + " " * 12 + '"fakeuser"', "fakeuser"),
+        ('"login"' + " " * 12 + ':"fakeuser"', "fakeuser"),
+        ('{"login": "fake-hs",' + " " * 12 + '"name":' + " " * 12 + '"Hiro Fakesato"}', "Fakesato"),
+        ("fakeuser commented" + " " * 12 + "on Oct 3", "fakeuser"),
+        ("fakeuser commented 12345 days ago", "fakeuser"),
+        ("Fake Person approved these changes" + SP, "Fake Person"),
+        ("On Tue, 29 Sep 2026," + " " * 12 + "Fake Person wrote:", "Fake Person"),
+        ("Fake Person" + " " * 12 + "wrote:" + SP, "Fake Person"),
+        ("Am 29.09.2026 schrieb" + " " * 12 + "Fake Person:", "Fake Person"),
+        ("thanks @fakeuser" + SP, "fakeuser"),
+    ],
+)
+def test_padding_and_wide_spacing(line, gone):
+    out = tp(line)
+    assert gone not in out, out
+    # the padding itself is kept byte for byte
+    assert out.endswith(line[len(line.rstrip(" \t\r")) :])
+
+
+def test_padding_kept_in_stream_and_whole_text():
+    text = "Author: Fake Person" + SP + "\nthanks @fakeuser" + TABS + "\n"
+    whole = tp(text)
+    assert whole == "Author: [PERSON-1]" + SP + "\nthanks @[PERSON-2]" + TABS + "\n"
+    s = StreamRedactor(Redactor(third_parties=True))
+    assert "".join(s.feed(c) for c in text) + s.close() == whole
+
+
 # --- command line ---------------------------------------------------------------------------
 
 
@@ -328,6 +371,15 @@ ADVERSARIAL = {
     "shell-args-dash-slash": "ls" + " -/" * 99 + " (@x\n",
     "shell-args-dash-dot": "ls" + " -." * 99 + " (@x\n",
     "shell-args-one-line": " -/",
+    "padded-trailer-lines": "Author: Fake Person" + " " * 150 + "\n",
+    "padded-trailer-one-line": "Author: Fake Person ",
+    "wide-header": "Co-authored-by:" + " " * 199 + "Fake Person" + " " * 199 + "<f@x.example>\n",
+    "wide-wrote": "On a," + " " * 199 + "Fake Person" + " " * 199 + "wrote:\n",
+    "wide-wrote-fail": "On a," + " " * 199 + "Fake Person" + " " * 199 + "x\n",
+    "wide-json": '"login":' + " " * 199 + ":" + " " * 199,
+    "wide-commented": "fakeuser commented" + " " * 199 + "on ",
+    "space-run": " " * 64,
+    "tab-run": "\t",
 }
 SIZES = (8_000, 40_000, 200_000)
 LIMIT = 2.0  # seconds at 200 KB; a linear pass takes a small fraction of that

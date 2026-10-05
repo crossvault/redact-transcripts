@@ -650,6 +650,40 @@
       "output": "hi @[PERSON-1]\n"
     },
     {
+      "id": "trailer-terminal-padding",
+      "description": "a git log line padded to the terminal width; the padding is kept",
+      "mode": "text",
+      "options": {
+        "third_parties": true
+      },
+      "input": "Author: Fake Person                                                                                                                        \n",
+      "expect": "redacted",
+      "rules": [
+        "person.name"
+      ],
+      "absent": [
+        "Fake Person"
+      ],
+      "output": "Author: [PERSON-1]                                                                                                                        \n"
+    },
+    {
+      "id": "trailer-wide-spacing",
+      "description": "a trailer with a wide gap after the colon",
+      "mode": "text",
+      "options": {
+        "third_parties": true
+      },
+      "input": "Co-authored-by:\t\t\t\t\t\t\t\t\tFake Person <fp@corp.example>\n",
+      "expect": "redacted",
+      "rules": [
+        "person.name"
+      ],
+      "absent": [
+        "Fake Person"
+      ],
+      "output": "Co-authored-by:\t\t\t\t\t\t\t\t\t[PERSON-1] <[REDACTED:pii.email]>\n"
+    },
+    {
       "id": "tp-negative-decorator",
       "description": "code or a non-person: must stay byte-identical",
       "mode": "text",
