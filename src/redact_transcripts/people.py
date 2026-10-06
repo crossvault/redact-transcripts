@@ -227,7 +227,7 @@ def normalize(identity: str) -> str:
 # people), `(` (decorator call), `{` (BibTeX), an assignment. A dotted handle (`@fake.user`,
 # `@name.bsky.social`) is allowed when nothing code-like follows it, so `@app.route(` stays code.
 _AT = re.compile(
-    r"(?<![\w.$@\\{<-])@(?=[\w-]{0,38}[^\W\d_])([^\W_][\w-]{0,38}(?:\.[^\W_][\w-]{0,38}){0,3})"
+    r"(?<![\w.$@\\{<\])>}-])@(?=[\w-]{0,38}[^\W\d_])([^\W_][\w-]{0,38}(?:\.[^\W_][\w-]{0,38}){0,3})"
     r"(?![\w({@-]|/(?!@)|\.[^\W\d]|[ \t]{0,8}(?:=(?!=)|\|\|=|\+=))"
 )
 # In a code span, `@` + an identifier with upper case, `_` or `.` is code (`@shared_task`,
@@ -456,6 +456,10 @@ class People:
     ) -> None:
         check_template(template)
         self.template = template
+        # A placeholder that ends right before an `@` (`[PERSON-1]@host` after `person.email_local`)
+        # must not turn the domain into a handle on a second pass, whatever the template.
+        before, _, after = template.partition("{n}")
+        self._placeholder_end = re.compile(re.escape(before) + r"\d{1,9}" + re.escape(after) + r"\Z")
         self.keep: FrozenSet[str] = frozenset(
             n for n in (normalize(k) for k in keep if isinstance(k, str)) if 0 < len(n) <= 200
         )
@@ -627,6 +631,8 @@ class People:
         ):
             return m.group(0)
         s, start = m.string, m.start()
+        if self._placeholder_end.search(s, max(0, start - 40), start):
+            return m.group(0)  # `[PERSON-1]@host`: the domain of an already redacted address
         first = len(s) - len(s.lstrip())
         if start == first:  # `@` opens the line
             if s.startswith("\t"):

@@ -130,6 +130,27 @@ def test_idempotent():
     assert r.redact_text(first) == first
 
 
+@pytest.mark.parametrize(
+    "text",
+    [
+        "ssh fake-user@fakehost.example.com",
+        "mail fake.user@sub.example.org and fake-b@example.com",
+        "[PERSON-1]@fakehost.example.com",
+        "[PERSON-12]@fake.example.net!",
+        "x [PERSON-3]@[PERSON-4] y",
+        "<@[PERSON-2]> and @[PERSON-5]",
+        "github.com/[PERSON-6] and medium.com/@[PERSON-7]",
+    ],
+)
+@pytest.mark.parametrize("template", ["[PERSON-{n}]", "<person {n}>", "{{p{n}}}", "(P{n})"])
+def test_idempotent_on_placeholder_forms(text, template):
+    def scrub(x):
+        return Redactor(config=Config(person_template=template), third_parties=True).redact_text(x)
+
+    once = scrub(text)
+    assert scrub(once) == once, (once, scrub(once))
+
+
 def test_idempotent_on_jsonl():
     raw = (
         json.dumps({"login": "fake-a", "msg": "thanks @fake-b", "name": "X", "email": "x@corp.example"})

@@ -667,6 +667,23 @@
       "output": "Author: [PERSON-1]                                                                                                                        \n"
     },
     {
+      "id": "email-local-subdomain-idempotent",
+      "description": "the domain of a redacted address is not a handle on a second pass",
+      "mode": "text",
+      "options": {
+        "third_parties": true
+      },
+      "input": "ssh fake-user@fakehost.example.com\n",
+      "expect": "redacted",
+      "rules": [
+        "person.email_local"
+      ],
+      "absent": [
+        "fake-user"
+      ],
+      "output": "ssh [PERSON-1]@fakehost.example.com\n"
+    },
+    {
       "id": "trailer-wide-spacing",
       "description": "a trailer with a wide gap after the colon",
       "mode": "text",
