@@ -16,6 +16,11 @@ or was derived from, a real credential. Please keep it that way in contributions
 | `split.json` | secrets cut by chunk boundaries, multi-line key blocks, CRLF | redacted |
 | `encoded.json` | double-encoded JSON, `\u` escapes, escaped JSON in text, base64 | redacted |
 | `known_misses.json` | shapes this library deliberately does not catch | byte-identical (documents the gap) |
+| `third_party.json` | other people's handles and attributed names, code near-misses, known misses; run with `"options": {"third_parties": true}` | as each vector's `expect` says |
+
+**Every person is fictional.** In `third_party.json` each redacted name or handle contains `FAKE`
+or `EXAMPLE` (any case), except the CJK placeholder name 山田 太郎 (the Japanese equivalent of
+"John Doe"). The test suite enforces this. Please never add a real person's name or handle.
 
 ## Schema
 
@@ -28,6 +33,7 @@ or was derived from, a real credential. Please keep it that way in contributions
       "id": "github-classic-pat",
       "description": "secret.github_token shape in prose",
       "mode": "text | stream | jsonl | claude-code",
+      "options": "optional: {\"third_parties\": true, \"keep_people\": [\"…\"]}",
       "input": "… (for mode=stream: \"chunks\": [\"…\", \"…\"] instead)",
       "expect": "redacted | unchanged | known_miss",
       "rules": ["rule names that must fire"],

@@ -1,0 +1,1124 @@
+{
+  "$schema_version": 1,
+  "category": "third_party",
+  "note": "Every person in this file is fictional: each name or handle contains FAKE or EXAMPLE, except the CJK placeholder name 山田 太郎 (the Japanese equivalent of John Doe).",
+  "vectors": [
+    {
+      "id": "at-mention",
+      "description": "an @-mention in prose",
+      "mode": "text",
+      "options": {
+        "third_parties": true
+      },
+      "input": "thanks @fake-mira for the review\n",
+      "expect": "redacted",
+      "rules": [
+        "person.handle"
+      ],
+      "absent": [
+        "fake-mira"
+      ],
+      "output": "thanks @[PERSON-1] for the review\n"
+    },
+    {
+      "id": "at-mention-list",
+      "description": "several mentions, one repeated: the same person keeps one number",
+      "mode": "text",
+      "options": {
+        "third_parties": true
+      },
+      "input": "cc: @lin-fake, @okon-fake and @lin-fake again\n",
+      "expect": "redacted",
+      "rules": [
+        "person.handle"
+      ],
+      "absent": [
+        "lin-fake",
+        "okon-fake"
+      ],
+      "output": "cc: @[PERSON-1], @[PERSON-2] and @[PERSON-1] again\n"
+    },
+    {
+      "id": "at-mention-unicode",
+      "description": "a handle with non-ASCII letters",
+      "mode": "text",
+      "options": {
+        "third_parties": true
+      },
+      "input": "hi @jürgen-fake\n",
+      "expect": "redacted",
+      "rules": [
+        "person.handle"
+      ],
+      "absent": [
+        "jürgen-fake"
+      ],
+      "output": "hi @[PERSON-1]\n"
+    },
+    {
+      "id": "at-mention-two-in-path",
+      "description": "two people joined by a slash (not an npm scope)",
+      "mode": "text",
+      "options": {
+        "third_parties": true
+      },
+      "input": "@fake-ana/@fake-bo please check\n",
+      "expect": "redacted",
+      "rules": [
+        "person.handle"
+      ],
+      "absent": [
+        "fake-ana",
+        "fake-bo"
+      ],
+      "output": "@[PERSON-1]/@[PERSON-2] please check\n"
+    },
+    {
+      "id": "co-authored-by",
+      "description": "Co-authored-by trailer; the address goes to pii.email",
+      "mode": "text",
+      "options": {
+        "third_parties": true
+      },
+      "input": "Co-authored-by: Dora Fakename <dora@corp.example>\n",
+      "expect": "redacted",
+      "rules": [
+        "person.name",
+        "pii.email"
+      ],
+      "absent": [
+        "Dora Fakename",
+        "dora@corp.example"
+      ],
+      "output": "Co-authored-by: [PERSON-1] <[REDACTED:pii.email]>\n"
+    },
+    {
+      "id": "signed-off-by-lowercase",
+      "description": "a trailer field holds a person even when lower case",
+      "mode": "text",
+      "options": {
+        "third_parties": true
+      },
+      "input": "signed-off-by: fakeuser <f@corp.example>\n",
+      "expect": "redacted",
+      "rules": [
+        "person.name"
+      ],
+      "absent": [
+        "fakeuser"
+      ],
+      "output": "signed-off-by: [PERSON-1] <[REDACTED:pii.email]>\n"
+    },
+    {
+      "id": "git-log-author",
+      "description": "Author line from git log",
+      "mode": "text",
+      "options": {
+        "third_parties": true
+      },
+      "input": "commit 0123abc\nAuthor: Jonas Fakebecker <jonas@corp.example>\n",
+      "expect": "redacted",
+      "rules": [
+        "person.name"
+      ],
+      "absent": [
+        "Jonas Fakebecker"
+      ],
+      "output": "commit 0123abc\nAuthor: [PERSON-1] <[REDACTED:pii.email]>\n"
+    },
+    {
+      "id": "trailer-unicode-particles",
+      "description": "a multi-token name with particles",
+      "mode": "text",
+      "options": {
+        "third_parties": true
+      },
+      "input": "Reviewed-by: Ana María de la Fakecruz\n",
+      "expect": "redacted",
+      "rules": [
+        "person.name"
+      ],
+      "absent": [
+        "Fakecruz"
+      ],
+      "output": "Reviewed-by: [PERSON-1]\n"
+    },
+    {
+      "id": "gh-comments-header",
+      "description": "gh pr view --comments header",
+      "mode": "text",
+      "options": {
+        "third_parties": true
+      },
+      "input": "author:\tfake-mk\nassociation:\tmember\n",
+      "expect": "redacted",
+      "rules": [
+        "person.name"
+      ],
+      "absent": [
+        "fake-mk"
+      ],
+      "output": "author:\t[PERSON-1]\nassociation:\tmember\n"
+    },
+    {
+      "id": "gh-assignees",
+      "description": "a comma list of logins",
+      "mode": "text",
+      "options": {
+        "third_parties": true
+      },
+      "input": "assignees:\tfake-one, fake-two\n",
+      "expect": "redacted",
+      "rules": [
+        "person.handle"
+      ],
+      "absent": [
+        "fake-one",
+        "fake-two"
+      ],
+      "output": "assignees:\t[PERSON-1], [PERSON-2]\n"
+    },
+    {
+      "id": "json-login",
+      "description": "API JSON pasted into a tool result",
+      "mode": "text",
+      "options": {
+        "third_parties": true
+      },
+      "input": "{\"user\": {\"login\": \"hsato-fake\", \"type\": \"User\"}}\n",
+      "expect": "redacted",
+      "rules": [
+        "person.handle"
+      ],
+      "absent": [
+        "hsato-fake"
+      ],
+      "output": "{\"user\": {\"login\": \"[PERSON-1]\", \"type\": \"User\"}}\n"
+    },
+    {
+      "id": "json-name-next-to-login",
+      "description": "\"name\" next to a login on the same line",
+      "mode": "text",
+      "options": {
+        "third_parties": true
+      },
+      "input": "{\"login\": \"fake-hs\", \"name\": \"Hiro Fakesato\"}\n",
+      "expect": "redacted",
+      "rules": [
+        "person.handle",
+        "person.name"
+      ],
+      "absent": [
+        "fake-hs",
+        "Hiro Fakesato"
+      ],
+      "output": "{\"login\": \"[PERSON-1]\", \"name\": \"[PERSON-2]\"}\n"
+    },
+    {
+      "id": "ui-commented",
+      "description": "web UI: X commented on <date>",
+      "mode": "text",
+      "options": {
+        "third_parties": true
+      },
+      "input": "priya-fake commented on Oct 1\n",
+      "expect": "redacted",
+      "rules": [
+        "person.name"
+      ],
+      "absent": [
+        "priya-fake"
+      ],
+      "output": "[PERSON-1] commented on Oct 1\n"
+    },
+    {
+      "id": "ui-approved",
+      "description": "web UI: X approved these changes",
+      "mode": "text",
+      "options": {
+        "third_parties": true
+      },
+      "input": "Elena Fakepetrova approved these changes\n",
+      "expect": "redacted",
+      "rules": [
+        "person.name"
+      ],
+      "absent": [
+        "Elena Fakepetrova"
+      ],
+      "output": "[PERSON-1] approved these changes\n"
+    },
+    {
+      "id": "mail-wrote",
+      "description": "mail quote header",
+      "mode": "text",
+      "options": {
+        "third_parties": true
+      },
+      "input": "On Tue, 29 Sep 2026 at 14:02, Elena Fakepetrova <elena@corp.example> wrote:\n",
+      "expect": "redacted",
+      "rules": [
+        "person.name"
+      ],
+      "absent": [
+        "Elena Fakepetrova"
+      ],
+      "output": "On Tue, 29 Sep 2026 at 14:02, [PERSON-1] <[REDACTED:pii.email]> wrote:\n"
+    },
+    {
+      "id": "mail-wrote-paren",
+      "description": "login plus a parenthetical real name",
+      "mode": "text",
+      "options": {
+        "third_parties": true
+      },
+      "input": "fakealice (Alice Fakesmith) wrote:\n",
+      "expect": "redacted",
+      "rules": [
+        "person.name"
+      ],
+      "absent": [
+        "fakealice",
+        "Alice Fakesmith"
+      ],
+      "output": "[PERSON-1] ([PERSON-2]) wrote:\n"
+    },
+    {
+      "id": "mail-schrieb",
+      "description": "German mail header, verb first",
+      "mode": "text",
+      "options": {
+        "third_parties": true
+      },
+      "input": "Am 29.09.2026 um 14:02 schrieb Elena Fakepetrova <elena@corp.example>:\n",
+      "expect": "redacted",
+      "rules": [
+        "person.name"
+      ],
+      "absent": [
+        "Elena Fakepetrova"
+      ],
+      "output": "Am 29.09.2026 um 14:02 schrieb [PERSON-1] <[REDACTED:pii.email]>:\n"
+    },
+    {
+      "id": "cjk-name",
+      "description": "a CJK placeholder name (the Japanese equivalent of John Doe)",
+      "mode": "text",
+      "options": {
+        "third_parties": true
+      },
+      "input": "山田 太郎 commented on Oct 3\n",
+      "expect": "redacted",
+      "rules": [
+        "person.name"
+      ],
+      "absent": [
+        "山田 太郎"
+      ],
+      "output": "[PERSON-1] commented on Oct 3\n"
+    },
+    {
+      "id": "profile-url",
+      "description": "a GitHub profile URL",
+      "mode": "text",
+      "options": {
+        "third_parties": true
+      },
+      "input": "profile: https://github.com/fake-rgarcia\n",
+      "expect": "redacted",
+      "rules": [
+        "person.profile_url"
+      ],
+      "absent": [
+        "fake-rgarcia"
+      ],
+      "output": "profile: https://github.com/[PERSON-1]\n"
+    },
+    {
+      "id": "x-status-url",
+      "description": "a post URL names its author",
+      "mode": "text",
+      "options": {
+        "third_parties": true
+      },
+      "input": "see x.com/fake_ab/status/1844\n",
+      "expect": "redacted",
+      "rules": [
+        "person.profile_url"
+      ],
+      "absent": [
+        "fake_ab"
+      ],
+      "output": "see x.com/[PERSON-1]/status/1844\n"
+    },
+    {
+      "id": "at-path-url",
+      "description": "/@user profile path on any host",
+      "mode": "text",
+      "options": {
+        "third_parties": true
+      },
+      "input": "https://medium.com/@fake.writer\n",
+      "expect": "redacted",
+      "rules": [
+        "person.profile_url"
+      ],
+      "absent": [
+        "fake.writer"
+      ],
+      "output": "https://medium.com/@[PERSON-1]\n"
+    },
+    {
+      "id": "discord-mention",
+      "description": "Discord mention markup",
+      "mode": "text",
+      "options": {
+        "third_parties": true
+      },
+      "input": "<@481516234281234567> ping (fake id)\n",
+      "expect": "redacted",
+      "rules": [
+        "person.handle"
+      ],
+      "absent": [
+        "481516234281234567"
+      ],
+      "output": "<@[PERSON-1]> ping (fake id)\n"
+    },
+    {
+      "id": "email-local-kept-domain",
+      "description": "an address at a kept domain loses its local part",
+      "mode": "text",
+      "options": {
+        "third_parties": true
+      },
+      "input": "mail alice.fake@example.com\n",
+      "expect": "redacted",
+      "rules": [
+        "person.email_local"
+      ],
+      "absent": [
+        "alice.fake"
+      ],
+      "output": "mail [PERSON-1]@example.com\n"
+    },
+    {
+      "id": "handle-and-email-same-number",
+      "description": "the same login as a handle and an e-mail local part",
+      "mode": "text",
+      "options": {
+        "third_parties": true
+      },
+      "input": "@fake-mira wrote to fake-mira@example.org\n",
+      "expect": "redacted",
+      "rules": [
+        "person.handle",
+        "person.email_local"
+      ],
+      "absent": [
+        "fake-mira"
+      ],
+      "output": "@[PERSON-1] wrote to [PERSON-1]@example.org\n"
+    },
+    {
+      "id": "author-keeps-self",
+      "description": "the author's own identity is kept, others go",
+      "mode": "text",
+      "options": {
+        "third_parties": true,
+        "keep_people": [
+          "ada-fakeauthor",
+          "Ada Fakeauthor",
+          "ada@fakeauthor.example"
+        ]
+      },
+      "input": "Signed-off-by: Ada Fakeauthor <ada@fakeauthor.example>\ncc @ada-fakeauthor and @fake-bo\n",
+      "expect": "redacted",
+      "rules": [
+        "person.handle"
+      ],
+      "absent": [
+        "fake-bo"
+      ],
+      "output": "Signed-off-by: Ada Fakeauthor <[REDACTED:pii.email]>\ncc @ada-fakeauthor and @[PERSON-1]\n"
+    },
+    {
+      "id": "jsonl-keyed-login",
+      "description": "jsonl: a person-named key in a decoded record",
+      "mode": "jsonl",
+      "options": {
+        "third_parties": true
+      },
+      "input": "{\"event\": \"push\", \"login\": \"fake-pusher\"}\n",
+      "expect": "redacted",
+      "rules": [
+        "person.keyed_value"
+      ],
+      "absent": [
+        "fake-pusher"
+      ],
+      "output": "{\"event\":\"push\",\"login\":\"[PERSON-1]\"}\n"
+    },
+    {
+      "id": "jsonl-keyed-name",
+      "description": "jsonl: name next to an email key",
+      "mode": "jsonl",
+      "options": {
+        "third_parties": true
+      },
+      "input": "{\"name\": \"Fake Committer\", \"email\": \"fc@example.com\"}\n",
+      "expect": "redacted",
+      "rules": [
+        "person.keyed_value",
+        "person.email_local"
+      ],
+      "absent": [
+        "Fake Committer"
+      ],
+      "output": "{\"name\":\"[PERSON-1]\",\"email\":\"[PERSON-2]@example.com\"}\n"
+    },
+    {
+      "id": "claude-code-tool-result",
+      "description": "a gh review pasted into a Claude Code tool result",
+      "mode": "claude-code",
+      "options": {
+        "third_parties": true
+      },
+      "input": "{\"type\": \"user\", \"sessionId\": \"00000000-0000-4000-8000-000000000001\", \"uuid\": \"00000000-0000-4000-8000-000000000002\", \"parentUuid\": null, \"message\": {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_01EXAMPLE\", \"content\": \"author:\\tfake-mk\\n--\\nPlease split this.\\nReviewed-by: Kofi Fakemensah\\nthanks @fake-mk\"}]}}\n",
+      "expect": "redacted",
+      "rules": [
+        "person.name",
+        "person.handle"
+      ],
+      "absent": [
+        "Kofi Fakemensah",
+        "fake-mk"
+      ],
+      "output": "{\"type\":\"user\",\"sessionId\":\"00000000-0000-4000-8000-000000000001\",\"uuid\":\"00000000-0000-4000-8000-000000000002\",\"parentUuid\":null,\"message\":{\"role\":\"user\",\"content\":[{\"type\":\"tool_result\",\"tool_use_id\":\"toolu_01EXAMPLE\",\"content\":\"author:\\t[PERSON-1]\\n--\\nPlease split this.\\nReviewed-by: [PERSON-2]\\nthanks @[PERSON-1]\"}]}}\n"
+    },
+    {
+      "id": "prose-with-sql-keyword",
+      "description": "an upper-case SQL word in prose does not make the line SQL",
+      "mode": "text",
+      "options": {
+        "third_parties": true
+      },
+      "input": "UPDATE: thanks @fakeuser for the fix\n",
+      "expect": "redacted",
+      "rules": [
+        "person.handle"
+      ],
+      "absent": [
+        "fakeuser"
+      ],
+      "output": "UPDATE: thanks @[PERSON-1] for the fix\n"
+    },
+    {
+      "id": "prose-with-set-keyword",
+      "description": "a lone SET in prose",
+      "mode": "text",
+      "options": {
+        "third_parties": true
+      },
+      "input": "Thanks @fakeuser, SET as default\n",
+      "expect": "redacted",
+      "rules": [
+        "person.handle"
+      ],
+      "absent": [
+        "fakeuser"
+      ],
+      "output": "Thanks @[PERSON-1], SET as default\n"
+    },
+    {
+      "id": "prose-from-keyword",
+      "description": "a lone FROM in prose",
+      "mode": "text",
+      "options": {
+        "third_parties": true
+      },
+      "input": "FROM the thread, @fakeuser said\n",
+      "expect": "redacted",
+      "rules": [
+        "person.handle"
+      ],
+      "absent": [
+        "fakeuser"
+      ],
+      "output": "FROM the thread, @[PERSON-1] said\n"
+    },
+    {
+      "id": "prose-starts-with-more",
+      "description": "a line starting with an everyday word that is also a shell command",
+      "mode": "text",
+      "options": {
+        "third_parties": true
+      },
+      "input": "more context from @fakeuser below\n",
+      "expect": "redacted",
+      "rules": [
+        "person.handle"
+      ],
+      "absent": [
+        "fakeuser"
+      ],
+      "output": "more context from @[PERSON-1] below\n"
+    },
+    {
+      "id": "prose-starts-with-code",
+      "description": "'code' at line start is prose without a $ prompt",
+      "mode": "text",
+      "options": {
+        "third_parties": true
+      },
+      "input": "code review by @fakeuser\n",
+      "expect": "redacted",
+      "rules": [
+        "person.handle"
+      ],
+      "absent": [
+        "fakeuser"
+      ],
+      "output": "code review by @[PERSON-1]\n"
+    },
+    {
+      "id": "prose-starts-with-open",
+      "description": "'open' at line start",
+      "mode": "text",
+      "options": {
+        "third_parties": true
+      },
+      "input": "open question for @fakeuser\n",
+      "expect": "redacted",
+      "rules": [
+        "person.handle"
+      ],
+      "absent": [
+        "fakeuser"
+      ],
+      "output": "open question for @[PERSON-1]\n"
+    },
+    {
+      "id": "prose-starts-with-find",
+      "description": "'find' followed by a handle, not a path",
+      "mode": "text",
+      "options": {
+        "third_parties": true
+      },
+      "input": "find @fakeuser on chat\n",
+      "expect": "redacted",
+      "rules": [
+        "person.handle"
+      ],
+      "absent": [
+        "fakeuser"
+      ],
+      "output": "find @[PERSON-1] on chat\n"
+    },
+    {
+      "id": "dotted-handle",
+      "description": "a dotted handle (Discord, Mastodon, Bluesky style)",
+      "mode": "text",
+      "options": {
+        "third_parties": true
+      },
+      "input": "thanks @fake.user!\n",
+      "expect": "redacted",
+      "rules": [
+        "person.handle"
+      ],
+      "absent": [
+        "fake.user"
+      ],
+      "output": "thanks @[PERSON-1]!\n"
+    },
+    {
+      "id": "dotted-domain-handle",
+      "description": "a domain-style handle",
+      "mode": "text",
+      "options": {
+        "third_parties": true
+      },
+      "input": "hi @fakeuser.bsky.social\n",
+      "expect": "redacted",
+      "rules": [
+        "person.handle"
+      ],
+      "absent": [
+        "fakeuser.bsky.social"
+      ],
+      "output": "hi @[PERSON-1]\n"
+    },
+    {
+      "id": "trailer-terminal-padding",
+      "description": "a git log line padded to the terminal width; the padding is kept",
+      "mode": "text",
+      "options": {
+        "third_parties": true
+      },
+      "input": "Author: Fake Person                                                                                                                        \n",
+      "expect": "redacted",
+      "rules": [
+        "person.name"
+      ],
+      "absent": [
+        "Fake Person"
+      ],
+      "output": "Author: [PERSON-1]                                                                                                                        \n"
+    },
+    {
+      "id": "email-local-subdomain-idempotent",
+      "description": "the domain of a redacted address is not a handle on a second pass",
+      "mode": "text",
+      "options": {
+        "third_parties": true
+      },
+      "input": "ssh fake-user@fakehost.example.com\n",
+      "expect": "redacted",
+      "rules": [
+        "person.email_local"
+      ],
+      "absent": [
+        "fake-user"
+      ],
+      "output": "ssh [PERSON-1]@fakehost.example.com\n"
+    },
+    {
+      "id": "trailer-wide-spacing",
+      "description": "a trailer with a wide gap after the colon",
+      "mode": "text",
+      "options": {
+        "third_parties": true
+      },
+      "input": "Co-authored-by:\t\t\t\t\t\t\t\t\tFake Person <fp@corp.example>\n",
+      "expect": "redacted",
+      "rules": [
+        "person.name"
+      ],
+      "absent": [
+        "Fake Person"
+      ],
+      "output": "Co-authored-by:\t\t\t\t\t\t\t\t\t[PERSON-1] <[REDACTED:pii.email]>\n"
+    },
+    {
+      "id": "tp-negative-decorator",
+      "description": "code or a non-person: must stay byte-identical",
+      "mode": "text",
+      "options": {
+        "third_parties": true
+      },
+      "input": "@dataclass\nclass Event:\n    kind: str\n",
+      "expect": "unchanged"
+    },
+    {
+      "id": "tp-negative-decorator-call",
+      "description": "code or a non-person: must stay byte-identical",
+      "mode": "text",
+      "options": {
+        "third_parties": true
+      },
+      "input": "@router.post(\"/hook\")\nasync def hook(req): ...\n",
+      "expect": "unchanged"
+    },
+    {
+      "id": "tp-negative-custom-decorator-alone",
+      "description": "code or a non-person: must stay byte-identical",
+      "mode": "text",
+      "options": {
+        "third_parties": true
+      },
+      "input": "@my_deco\ndef f(): pass\n",
+      "expect": "unchanged"
+    },
+    {
+      "id": "tp-negative-java-annotations",
+      "description": "code or a non-person: must stay byte-identical",
+      "mode": "text",
+      "options": {
+        "third_parties": true
+      },
+      "input": "public X post(@Valid @RequestBody Foo f) { return svc.save(f); }\n",
+      "expect": "unchanged"
+    },
+    {
+      "id": "tp-negative-npm-scopes",
+      "description": "code or a non-person: must stay byte-identical",
+      "mode": "text",
+      "options": {
+        "third_parties": true
+      },
+      "input": "pnpm add @tanstack/react-query@^5.0.0 @types/node@22 vite@latest\n",
+      "expect": "unchanged"
+    },
+    {
+      "id": "tp-negative-jsdoc",
+      "description": "code or a non-person: must stay byte-identical",
+      "mode": "text",
+      "options": {
+        "third_parties": true
+      },
+      "input": " * @param a the first\n * @returns the sum\n",
+      "expect": "unchanged"
+    },
+    {
+      "id": "tp-negative-css-at-rules",
+      "description": "code or a non-person: must stay byte-identical",
+      "mode": "text",
+      "options": {
+        "third_parties": true
+      },
+      "input": "@media (max-width: 600px) { .x { display: none; } }\n",
+      "expect": "unchanged"
+    },
+    {
+      "id": "tp-negative-makefile",
+      "description": "code or a non-person: must stay byte-identical",
+      "mode": "text",
+      "options": {
+        "third_parties": true
+      },
+      "input": "build:\n\t@echo building\n",
+      "expect": "unchanged"
+    },
+    {
+      "id": "tp-negative-shell-args",
+      "description": "code or a non-person: must stay byte-identical",
+      "mode": "text",
+      "options": {
+        "third_parties": true
+      },
+      "input": "run() { exec \"$@\"; }\n",
+      "expect": "unchanged"
+    },
+    {
+      "id": "tp-negative-sql-params",
+      "description": "code or a non-person: must stay byte-identical",
+      "mode": "text",
+      "options": {
+        "third_parties": true
+      },
+      "input": "SELECT * FROM t WHERE id = @id AND s = @status\n",
+      "expect": "unchanged"
+    },
+    {
+      "id": "tp-negative-ruby-ivars",
+      "description": "code or a non-person: must stay byte-identical",
+      "mode": "text",
+      "options": {
+        "third_parties": true
+      },
+      "input": "@items = items\n@total ||= 0\n",
+      "expect": "unchanged"
+    },
+    {
+      "id": "tp-negative-actions-pin",
+      "description": "code or a non-person: must stay byte-identical",
+      "mode": "text",
+      "options": {
+        "third_parties": true
+      },
+      "input": "- uses: actions/checkout@v4\n",
+      "expect": "unchanged"
+    },
+    {
+      "id": "tp-negative-timestamp",
+      "description": "code or a non-person: must stay byte-identical",
+      "mode": "text",
+      "options": {
+        "third_parties": true
+      },
+      "input": "noted @2026-09-30T13:35:03Z\n",
+      "expect": "unchanged"
+    },
+    {
+      "id": "tp-negative-at-as-at",
+      "description": "code or a non-person: must stay byte-identical",
+      "mode": "text",
+      "options": {
+        "third_parties": true
+      },
+      "input": "I'm @home today, @work tomorrow\n",
+      "expect": "unchanged"
+    },
+    {
+      "id": "tp-negative-bots-and-groups",
+      "description": "code or a non-person: must stay byte-identical",
+      "mode": "text",
+      "options": {
+        "third_parties": true
+      },
+      "input": "dependabot[bot] commented on Oct 3\n@dependabot rebase\n@here the release is out\n",
+      "expect": "unchanged"
+    },
+    {
+      "id": "tp-negative-ai-co-author",
+      "description": "code or a non-person: must stay byte-identical",
+      "mode": "text",
+      "options": {
+        "third_parties": true
+      },
+      "input": "Co-Authored-By: Claude <noreply@example.com>\n",
+      "expect": "unchanged"
+    },
+    {
+      "id": "tp-negative-role-mailbox",
+      "description": "code or a non-person: must stay byte-identical",
+      "mode": "text",
+      "options": {
+        "third_parties": true
+      },
+      "input": "write to security@example.com\n",
+      "expect": "unchanged"
+    },
+    {
+      "id": "tp-negative-repo-url",
+      "description": "code or a non-person: must stay byte-identical",
+      "mode": "text",
+      "options": {
+        "third_parties": true
+      },
+      "input": "see github.com/fake-org/widgets/blob/main/x.py\n",
+      "expect": "unchanged"
+    },
+    {
+      "id": "tp-negative-json-tool-name",
+      "description": "code or a non-person: must stay byte-identical",
+      "mode": "text",
+      "options": {
+        "third_parties": true
+      },
+      "input": "{\"name\": \"Bash\", \"input\": {}}\n",
+      "expect": "unchanged"
+    },
+    {
+      "id": "tp-negative-json-job-name",
+      "description": "code or a non-person: must stay byte-identical",
+      "mode": "text",
+      "options": {
+        "third_parties": true
+      },
+      "input": "{\"name\": \"Build And Test\", \"runs-on\": \"ubuntu-latest\"}\n",
+      "expect": "unchanged"
+    },
+    {
+      "id": "tp-negative-prose-not-a-name",
+      "description": "code or a non-person: must stay byte-identical",
+      "mode": "text",
+      "options": {
+        "third_parties": true
+      },
+      "input": "the docs wrote: nothing useful\n",
+      "expect": "unchanged"
+    },
+    {
+      "id": "tp-negative-pronoun-author",
+      "description": "code or a non-person: must stay byte-identical",
+      "mode": "text",
+      "options": {
+        "third_parties": true
+      },
+      "input": "Commit: fix the retry\nAuthor: Claude\n",
+      "expect": "unchanged"
+    },
+    {
+      "id": "tp-negative-shell-file-arg",
+      "description": "code or a non-person: must stay byte-identical",
+      "mode": "text",
+      "options": {
+        "third_parties": true
+      },
+      "input": "$ cat @rules.txt | wc -l\n",
+      "expect": "unchanged"
+    },
+    {
+      "id": "tp-negative-code-span-identifier",
+      "description": "code or a non-person: must stay byte-identical",
+      "mode": "text",
+      "options": {
+        "third_parties": true
+      },
+      "input": "markers like `@dsCard` and `@cache`\n",
+      "expect": "unchanged"
+    },
+    {
+      "id": "tp-negative-sql-insert-values",
+      "description": "code or a non-person: must stay byte-identical",
+      "mode": "text",
+      "options": {
+        "third_parties": true
+      },
+      "input": "INSERT INTO t (a, b) VALUES (@a, @b);\n",
+      "expect": "unchanged"
+    },
+    {
+      "id": "tp-negative-sql-declare",
+      "description": "code or a non-person: must stay byte-identical",
+      "mode": "text",
+      "options": {
+        "third_parties": true
+      },
+      "input": "DECLARE @total INT\n",
+      "expect": "unchanged"
+    },
+    {
+      "id": "tp-negative-shell-prompt-more",
+      "description": "code or a non-person: must stay byte-identical",
+      "mode": "text",
+      "options": {
+        "third_parties": true
+      },
+      "input": "$ more @notes.txt\n",
+      "expect": "unchanged"
+    },
+    {
+      "id": "tp-negative-shell-flags-path",
+      "description": "code or a non-person: must stay byte-identical",
+      "mode": "text",
+      "options": {
+        "third_parties": true
+      },
+      "input": "$ cat -n @rules.txt | wc -l\n",
+      "expect": "unchanged"
+    },
+    {
+      "id": "tp-negative-decorator-named-in-prose",
+      "description": "code or a non-person: must stay byte-identical",
+      "mode": "text",
+      "options": {
+        "third_parties": true
+      },
+      "input": "Use the @login_required decorator\n",
+      "expect": "unchanged"
+    },
+    {
+      "id": "tp-negative-decorators-in-code-span",
+      "description": "code or a non-person: must stay byte-identical",
+      "mode": "text",
+      "options": {
+        "third_parties": true
+      },
+      "input": "add `@shared_task` and `@SpringBootApplication`\n",
+      "expect": "unchanged"
+    },
+    {
+      "id": "tp-negative-npm-scope-in-prose",
+      "description": "code or a non-person: must stay byte-identical",
+      "mode": "text",
+      "options": {
+        "third_parties": true
+      },
+      "input": "the @fakescope scope\n",
+      "expect": "unchanged"
+    },
+    {
+      "id": "tp-negative-dotted-decorator-in-prose",
+      "description": "code or a non-person: must stay byte-identical",
+      "mode": "text",
+      "options": {
+        "third_parties": true
+      },
+      "input": "use @app.route to register\n",
+      "expect": "unchanged"
+    },
+    {
+      "id": "tp-negative-css-counter-style",
+      "description": "code or a non-person: must stay byte-identical",
+      "mode": "text",
+      "options": {
+        "third_parties": true
+      },
+      "input": "@counter-style thumbs { system: cyclic; }\n",
+      "expect": "unchanged"
+    },
+    {
+      "id": "tp-negative-objc-implementation",
+      "description": "code or a non-person: must stay byte-identical",
+      "mode": "text",
+      "options": {
+        "third_parties": true
+      },
+      "input": "@implementation FakeView\n",
+      "expect": "unchanged"
+    },
+    {
+      "id": "tp-negative-agent-bots",
+      "description": "code or a non-person: must stay byte-identical",
+      "mode": "text",
+      "options": {
+        "third_parties": true
+      },
+      "input": "@cursor please fix, @devin too, @gemini-code-assist review\n",
+      "expect": "unchanged"
+    },
+    {
+      "id": "tp-negative-tool-wrote",
+      "description": "code or a non-person: must stay byte-identical",
+      "mode": "text",
+      "options": {
+        "third_parties": true
+      },
+      "input": "Python wrote: Traceback\n",
+      "expect": "unchanged"
+    },
+    {
+      "id": "tp-negative-service-account-login",
+      "description": "code or a non-person: must stay byte-identical",
+      "mode": "text",
+      "options": {
+        "third_parties": true
+      },
+      "input": "{\"username\": \"postgres\"}\n",
+      "expect": "unchanged"
+    },
+    {
+      "id": "tp-miss-bare-name-in-prose",
+      "description": "a name in running prose: no context says it is a person",
+      "mode": "text",
+      "options": {
+        "third_parties": true
+      },
+      "input": "I asked Marta Fakeova about it\n",
+      "expect": "known_miss"
+    },
+    {
+      "id": "tp-miss-handle-alone-on-line",
+      "description": "an @handle alone on its line looks like a decorator",
+      "mode": "text",
+      "options": {
+        "third_parties": true
+      },
+      "input": "@fake-mira\n",
+      "expect": "known_miss"
+    },
+    {
+      "id": "tp-miss-git-log-custom-format",
+      "description": "a git log --format line without a field name",
+      "mode": "text",
+      "options": {
+        "third_parties": true
+      },
+      "input": "a1b2c3d Fixed it (Jane Fakedoe, 3 days ago)\n",
+      "expect": "known_miss"
+    },
+    {
+      "id": "tp-miss-quoted-comment-text",
+      "description": "the words of a quoted comment stay; only the attribution goes",
+      "mode": "text",
+      "options": {
+        "third_parties": true
+      },
+      "input": "> We prefer smaller patches. (fake reviewer text)\n",
+      "expect": "known_miss"
+    },
+    {
+      "id": "tp-miss-lowercase-full-name-in-prose-header",
+      "description": "a lower-case multi-word name before 'wrote:' is not name-shaped",
+      "mode": "text",
+      "options": {
+        "third_parties": true
+      },
+      "input": "jane fakedoe wrote:\n",
+      "expect": "known_miss"
+    }
+  ]
+}

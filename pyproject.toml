@@ -7,7 +7,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "redact-transcripts"
-version = "0.1.0"
+version = "0.2.0"
 description = "Redact secrets and personal data from AI-agent transcripts, JSONL logs and text, without breaking their structure."
 readme = "README.md"
 requires-python = ">=3.9"

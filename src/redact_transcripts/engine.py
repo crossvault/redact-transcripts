@@ -9,6 +9,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Callable, Dict, FrozenSet, Iterable, List, Optional, Sequence, Tuple
 
+from .people import DEFAULT_TEMPLATE, KEYED_PERSON, RULE_NAMES, People
 from .rules import Base64Rule, Rule, default_rules, is_numeric_secret_key, is_secret_key, is_secret_value
 
 #: Pseudo-rule for a JSON value stored under a key that names a secret (``{"password": "..."}``).
@@ -25,12 +26,17 @@ class Config:
     ``email_keep_domains``: e-mail addresses at these domains (and their subdomains) are kept.
     ``ipv4_keep``: IPv4 addresses that are kept verbatim.
     ``marker_template``: the replacement text; ``{rule}`` is the rule name.
+    ``keep_people``: with ``third_parties`` on, identities that are never redacted: the author's
+    own handles, names and full e-mail addresses, or extra bot accounts.
+    ``person_template``: the placeholder for a third party; ``{n}`` is its number.
     """
 
     email_keep_domains: Tuple[str, ...] = ("example.com", "example.org", "example.net")
     ipv4_keep: FrozenSet[str] = frozenset({"127.0.0.1", "0.0.0.0", "255.255.255.255"})
     home_dir_placeholder: str = "[USER]"
     marker_template: str = "[REDACTED:{rule}]"
+    keep_people: Tuple[str, ...] = ()
+    person_template: str = DEFAULT_TEMPLATE
 
 
 def _enabled(name: str, disable: Iterable[str]) -> bool:
@@ -47,6 +53,17 @@ class Redactor:
     'token=[REDACTED:secret.assignment]'
 
     ``disable`` takes rule names or prefixes, e.g. ``("pii", "infra.ipv4")``.
+
+    ``third_parties=True`` also replaces other people's handles and attributed names with
+    numbered placeholders (the ``person.*`` rules, see :mod:`redact_transcripts.people`):
+
+    >>> r = Redactor(third_parties=True)
+    >>> r.redact_text("thanks @fake-reviewer, see @fake-reviewer's note")
+    "thanks @[PERSON-1], see @[PERSON-1]'s note"
+
+    With ``third_parties`` on, a redactor numbers people across every call until :meth:`reset`;
+    the formats and :class:`StreamRedactor` reset it at the start of each transcript. Use one
+    redactor per transcript at a time.
     """
 
     def __init__(
@@ -54,12 +71,20 @@ class Redactor:
         rules: Optional[Sequence[Rule]] = None,
         config: Optional[Config] = None,
         disable: Iterable[str] = (),
+        third_parties: bool = False,
     ) -> None:
         self.config = config or Config()
         disable = tuple(disable)
         rules = list(default_rules() if rules is None else rules)
         self.rules: List[Rule] = [r for r in rules if _enabled(r.name, disable)]
         self.keyed_value_enabled = _enabled(KEYED_VALUE, disable)
+        self.people: Optional[People] = None
+        if third_parties:
+            self.people = People(
+                keep=self.config.keep_people,
+                template=self.config.person_template,
+                enabled=[n for n in RULE_NAMES if _enabled(n, disable)],
+            )
         self._bound: List[Tuple[str, "re.Pattern[str]", Callable]] = [
             (r.name, r.pattern, r.bind(self)) for r in self.rules
         ]
@@ -74,7 +99,14 @@ class Redactor:
         names = [r.name for r in self.rules]
         if self.keyed_value_enabled:
             names.append(KEYED_VALUE)
+        if self.people is not None:
+            names.extend(n for n in RULE_NAMES if n in self.people.enabled)
         return names
+
+    def reset(self) -> None:
+        """Start a new transcript: forget the third-party placeholders handed out so far."""
+        if self.people is not None:
+            self.people.reset()
 
     def marker(self, rule: str) -> str:
         return self.config.marker_template.format(rule=rule)
@@ -98,7 +130,10 @@ class Redactor:
 
     def redact_text(self, text: str, counts: Optional[Dict[str, int]] = None) -> str:
         """Apply every rule to one string. ``counts`` (if given) is incremented per rule."""
-        return self._apply(self._bound, text, counts)
+        text = self._apply(self._bound, text, counts)
+        if self.people is not None:
+            text = self.people.redact(text, counts)
+        return text
 
     def contains_secret(self, text: str) -> bool:
         """True if a ``secret.*`` rule (other than the base64 rule) would change ``text``."""
@@ -126,6 +161,13 @@ class Redactor:
                     nk += "_"
                 if isinstance(x, str) and keep is not None and keep(k, x) and not self.contains_secret(x):
                     out[nk] = x
+                elif (
+                    isinstance(x, str)
+                    and self.people is not None
+                    and (person := self.people.keyed(k, x, value.keys()))
+                ):
+                    counts[KEYED_PERSON] = counts.get(KEYED_PERSON, 0) + 1
+                    out[nk] = person
                 elif self.keyed_value_enabled and _keyed_secret(k, x):
                     counts[KEYED_VALUE] = counts.get(KEYED_VALUE, 0) + 1
                     out[nk] = self.marker(KEYED_VALUE)
@@ -234,6 +276,7 @@ class StreamRedactor:
         self.redactor = redactor or Redactor()
         self.max_buffer = max_buffer
         self.report = report if report is not None else Report(format="text")
+        self.redactor.reset()
         self._buf = ""
         self._held = ""
         self._held_start = 0

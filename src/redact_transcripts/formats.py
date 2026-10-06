@@ -41,10 +41,15 @@ class Format:
     #: :class:`Config` when the caller does not pass its own redactor).
     email_keep_domains: Tuple[str, ...] = ()
 
-    def default_redactor(self, disable: Iterable[str] = ()) -> Redactor:
+    def default_redactor(
+        self, disable: Iterable[str] = (), third_parties: bool = False, keep_people: Iterable[str] = ()
+    ) -> Redactor:
         base = Config()
-        cfg = Config(email_keep_domains=base.email_keep_domains + tuple(self.email_keep_domains))
-        return Redactor(config=cfg, disable=disable)
+        cfg = Config(
+            email_keep_domains=base.email_keep_domains + tuple(self.email_keep_domains),
+            keep_people=tuple(keep_people),
+        )
+        return Redactor(config=cfg, disable=disable, third_parties=third_parties)
 
     def redact_bytes(self, raw: bytes, redactor: Redactor) -> Tuple[bytes, Report]:
         raise NotImplementedError
@@ -108,6 +113,7 @@ class JsonlFormat(Format):
 
     def redact_bytes(self, raw: bytes, redactor: Redactor) -> Tuple[bytes, Report]:
         report = Report(format=self.name, input_sha256=hashlib.sha256(raw).hexdigest())
+        redactor.reset()
         text = raw.decode(_ENC, _ERRORS)
         lines = text.split("\n")
         trailing_newline = text.endswith("\n")
@@ -230,13 +236,24 @@ def detect_format(raw: bytes) -> Format:
 
 
 def redact_bytes(
-    raw: bytes, format: "str | Format" = "auto", redactor: Optional[Redactor] = None
+    raw: bytes,
+    format: "str | Format" = "auto",
+    redactor: Optional[Redactor] = None,
+    *,
+    third_parties: bool = False,
+    keep_people: Iterable[str] = (),
 ) -> Tuple[bytes, Report]:
-    """Redact ``raw`` in the given format (``"auto"`` detects it). Returns (output, report)."""
+    """Redact ``raw`` in the given format (``"auto"`` detects it). Returns (output, report).
+
+    ``third_parties`` and ``keep_people`` configure the default redactor; they are ignored when
+    you pass your own ``redactor``.
+    """
     if isinstance(format, Format):
         fmt = format
     elif format == "auto":
         fmt = detect_format(raw)
     else:
         fmt = get_format(format)
-    return fmt.redact_bytes(raw, redactor or fmt.default_redactor())
+    if redactor is None:
+        redactor = fmt.default_redactor(third_parties=third_parties, keep_people=keep_people)
+    return fmt.redact_bytes(raw, redactor)

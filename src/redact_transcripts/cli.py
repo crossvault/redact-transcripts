@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import codecs
+import dataclasses
 import json
 import os
 import re
@@ -18,6 +19,7 @@ from typing import BinaryIO, List, Optional, Sequence
 from . import __version__
 from .engine import KEYED_VALUE, Redactor, Report, StreamRedactor
 from .formats import JsonlFormat, TextFormat, detect_format, format_names, get_format
+from .people import RULE_NAMES as PERSON_RULES
 from .rules import Rule, default_rules
 
 _CHUNK = 64 * 1024
@@ -71,6 +73,20 @@ def _parser() -> argparse.ArgumentParser:
         metavar="NAME=REGEX",
         help="add a rule that redacts every match of REGEX, e.g. "
         "'secret.acme_token=\\bacme_[A-Za-z0-9]{24,}' (repeatable)",
+    )
+    p.add_argument(
+        "--third-parties",
+        action="store_true",
+        help="also replace other people's @handles and attributed names (commit trailers, "
+        "'Author:' lines, 'X wrote:', login fields, profile URLs) with [PERSON-n] placeholders",
+    )
+    p.add_argument(
+        "--keep-person",
+        action="append",
+        default=[],
+        metavar="NAME",
+        help="with --third-parties: never redact this handle, name or full e-mail address, e.g. "
+        "your own (repeatable); affects person.* only, pii.email still redacts the address",
     )
     p.add_argument("--list-rules", action="store_true", help="list rule names and exit")
     p.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
@@ -133,12 +149,16 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         parser.error("--strict only applies with --check")
     if args.output and args.check:
         parser.error("--check writes no output; drop -o")
+    if args.keep_person and not args.third_parties:
+        parser.error("--keep-person only applies with --third-parties")
     try:
         rules = default_rules() + _extra_rules(args.rule)
     except ValueError as e:
         sys.stderr.write(f"{PROG}: {e}\n")
         return 2
     known = [r.name for r in rules] + [KEYED_VALUE]
+    if args.third_parties:
+        known += list(PERSON_RULES)
     for d in args.disable:
         d = d.rstrip(".")
         if not any(n == d or n.startswith(d + ".") for n in known):
@@ -175,7 +195,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             if args.keep_key and isinstance(fmt, JsonlFormat):
                 fmt = fmt.with_structural_keys(args.keep_key)
             base = fmt.default_redactor()
-            redactor = Redactor(rules=rules, config=base.config, disable=args.disable)
+            config = dataclasses.replace(base.config, keep_people=tuple(args.keep_person))
+            redactor = Redactor(
+                rules=rules, config=config, disable=args.disable, third_parties=args.third_parties
+            )
 
             if not args.check:
                 dst = open(args.output, "wb") if args.output else sys.stdout.buffer

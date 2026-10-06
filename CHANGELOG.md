@@ -6,7 +6,29 @@ All notable changes are listed here. The format follows
 
 ## [Unreleased]
 
-## [0.1.0] - unreleased (date set at release)
+## [0.2.0] - unreleased (date set at release)
+
+### Added
+- Opt-in third-party redaction: `--third-parties` on the command line, `Redactor(third_parties=True)`
+  or `redact_bytes(..., third_parties=True)` in Python. Other people's `@handles`, commit trailers
+  (`Co-authored-by:`, `Signed-off-by:` …), `Author:` lines, "X wrote:" and web-UI headers, login
+  fields, profile URLs and e-mail local parts are replaced with numbered placeholders
+  (`[PERSON-1]`) that stay stable within a transcript. Five new rules: `person.handle`,
+  `person.name`, `person.email_local`, `person.profile_url`, `person.keyed_value`.
+- Allow-list: `--keep-person` / `Config(keep_people=...)` keeps the author's own handles, names and
+  full e-mail addresses; bots, CI services, AI assistants and group mentions are always kept.
+- `Config(person_template=...)` for the placeholder; `Redactor.reset()` starts a new transcript.
+- `vectors/third_party.json`: fictional people, code near-misses and known misses (CC0).
+- Dotted handles (`@fake.user`, `@name.bsky.social`) are recognised.
+- Timing tests: an audit runs every `person.*` regular expression on adversarial lines of 8, 40
+  and 200 bytes, and the whole pass at 8, 40 and 200 KB, each with a hard timeout.
+
+### Changed
+- `Redactor` keeps per-transcript state when `third_parties` is on; the formats and
+  `StreamRedactor` reset it at the start of each transcript. Without `third_parties` output is
+  unchanged.
+
+## [0.1.0] - 2026-10-05
 
 First public release.
 
