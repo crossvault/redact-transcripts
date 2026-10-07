@@ -6,6 +6,23 @@ All notable changes are listed here. The format follows
 
 ## [Unreleased]
 
+### Added
+- Vendor token shapes: `secret.openrouter_key`, `secret.google_oauth_token` (access and refresh
+  tokens), `secret.google_oauth_client_secret`, `secret.groq_key`, `secret.xai_key`,
+  `secret.stripe_webhook_secret`, `secret.zai_key`.
+
+### Changed
+- Vendor tokens are also recognised right after `_` or a URL escape (`CONF_ghp_…`, `?k=%20AKIA…`),
+  right after a literal `\n`/`\r`/`\t` escape, glued onto preceding text (exact vendor shape only),
+  and when followed by `_<word>`. In these identifier-like positions the token body must look random,
+  so names such as `storage_read_bytes` or `slack_xoxb-tokens-and-scopes-guide` are kept.
+- Vendor token rules never rewrite text inside base64 data or a `data:` URI. A key id that sits
+  inside such data (an `AKIA…` run joined by `+` in a long base64 run) is therefore kept.
+- The newer shapes (`ya29.`, `1//0`, `GOCSPX-`, `gsk_`, `xai-`) need a random-looking body in every
+  position and may end right before `/`, `+` or `=`; Google refresh tokens must start `1//0`, and
+  `secret.zai_key` needs a random-looking part after the `.`.
+- Scan every occurrence of duplicate JSON keys.
+
 ## [0.2.0] - unreleased (date set at release)
 
 ### Added

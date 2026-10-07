@@ -609,6 +609,188 @@
         "8642",
         "40961234"
       ]
+    },
+    {
+      "id": "openrouter-key",
+      "description": "secret.openrouter_key openrouter key",
+      "mode": "text",
+      "input": "here it is: sk-or-v1-FAKEEXAMPLE000000000000aBcD ok\n",
+      "expect": "redacted",
+      "rules": [
+        "secret.openrouter_key"
+      ],
+      "absent": [
+        "sk-or-v1-FAKEEXAMPLE000000000000aBcD"
+      ],
+      "output": "here it is: [REDACTED:secret.openrouter_key] ok\n"
+    },
+    {
+      "id": "google-oauth-access-token",
+      "description": "secret.google_oauth_token google oauth access token",
+      "mode": "text",
+      "input": "here it is: ya29.FAKEEXAMPLE0000000000aBcD ok\n",
+      "expect": "redacted",
+      "rules": [
+        "secret.google_oauth_token"
+      ],
+      "absent": [
+        "ya29.FAKEEXAMPLE0000000000aBcD"
+      ],
+      "output": "here it is: [REDACTED:secret.google_oauth_token] ok\n"
+    },
+    {
+      "id": "google-oauth-refresh-token",
+      "description": "secret.google_oauth_token google oauth refresh token",
+      "mode": "text",
+      "input": "here it is: 1//0FAKEEXAMPLE0000000000000000000aBcD ok\n",
+      "expect": "redacted",
+      "rules": [
+        "secret.google_oauth_token"
+      ],
+      "absent": [
+        "1//0FAKEEXAMPLE0000000000000000000aBcD"
+      ],
+      "output": "here it is: [REDACTED:secret.google_oauth_token] ok\n"
+    },
+    {
+      "id": "google-oauth-client-secret",
+      "description": "secret.google_oauth_client_secret google oauth client secret",
+      "mode": "text",
+      "input": "here it is: GOCSPX-FAKEEXAMPLE000000000aBcD ok\n",
+      "expect": "redacted",
+      "rules": [
+        "secret.google_oauth_client_secret"
+      ],
+      "absent": [
+        "GOCSPX-FAKEEXAMPLE000000000aBcD"
+      ],
+      "output": "here it is: [REDACTED:secret.google_oauth_client_secret] ok\n"
+    },
+    {
+      "id": "groq-key",
+      "description": "secret.groq_key groq key",
+      "mode": "text",
+      "input": "here it is: gsk_FAKEEXAMPLE000000000000aBcD ok\n",
+      "expect": "redacted",
+      "rules": [
+        "secret.groq_key"
+      ],
+      "absent": [
+        "gsk_FAKEEXAMPLE000000000000aBcD"
+      ],
+      "output": "here it is: [REDACTED:secret.groq_key] ok\n"
+    },
+    {
+      "id": "xai-key",
+      "description": "secret.xai_key xai key",
+      "mode": "text",
+      "input": "here it is: xai-FAKEEXAMPLE000000000000aBcD ok\n",
+      "expect": "redacted",
+      "rules": [
+        "secret.xai_key"
+      ],
+      "absent": [
+        "xai-FAKEEXAMPLE000000000000aBcD"
+      ],
+      "output": "here it is: [REDACTED:secret.xai_key] ok\n"
+    },
+    {
+      "id": "stripe-webhook-secret",
+      "description": "secret.stripe_webhook_secret stripe webhook secret",
+      "mode": "text",
+      "input": "here it is: whsec_FAKEEXAMPLE00000000000000000000 ok\n",
+      "expect": "redacted",
+      "rules": [
+        "secret.stripe_webhook_secret"
+      ],
+      "absent": [
+        "whsec_FAKEEXAMPLE00000000000000000000"
+      ],
+      "output": "here it is: [REDACTED:secret.stripe_webhook_secret] ok\n"
+    },
+    {
+      "id": "zai-key",
+      "description": "secret.zai_key zai key",
+      "mode": "text",
+      "input": "here it is: 0123456789abcdef0123456789abcdef.FAKEEXAMPLE00000 ok\n",
+      "expect": "redacted",
+      "rules": [
+        "secret.zai_key"
+      ],
+      "absent": [
+        "0123456789abcdef0123456789abcdef.FAKEEXAMPLE00000"
+      ],
+      "output": "here it is: [REDACTED:secret.zai_key] ok\n"
+    },
+    {
+      "id": "github-token-after-underscore",
+      "description": "secret.github_token github token after underscore",
+      "mode": "text",
+      "input": "export CONF_ghp_FAKEEXAMPLE000000000000000000000000 ok\n",
+      "expect": "redacted",
+      "rules": [
+        "secret.github_token"
+      ],
+      "absent": [
+        "ghp_FAKEEXAMPLE000000000000000000000000"
+      ],
+      "output": "export CONF_[REDACTED:secret.github_token] ok\n"
+    },
+    {
+      "id": "aws-key-id-after-url-escape",
+      "description": "secret.aws_key_id aws key id after url escape",
+      "mode": "text",
+      "input": "https://x.example/?k=%20AKIAFAKEEXAMPLE00000&a=1\n",
+      "expect": "redacted",
+      "rules": [
+        "secret.aws_key_id"
+      ],
+      "absent": [
+        "AKIAFAKEEXAMPLE00000"
+      ],
+      "output": "https://x.example/?k=%20[REDACTED:secret.aws_key_id]&a=1\n"
+    },
+    {
+      "id": "github-token-followed-by-underscore-word",
+      "description": "secret.github_token github token followed by underscore word",
+      "mode": "text",
+      "input": "key ghp_FAKEEXAMPLE000000000000000000000000_notes ok\n",
+      "expect": "redacted",
+      "rules": [
+        "secret.github_token"
+      ],
+      "absent": [
+        "ghp_FAKEEXAMPLE000000000000000000000000"
+      ],
+      "output": "key [REDACTED:secret.github_token]_notes ok\n"
+    },
+    {
+      "id": "github-token-glued",
+      "description": "secret.github_token github token glued",
+      "mode": "text",
+      "input": "notesghp_FAKEEXAMPLE0000000000000000000000000 ok\n",
+      "expect": "redacted",
+      "rules": [
+        "secret.github_token"
+      ],
+      "absent": [
+        "ghp_FAKEEXAMPLE0000000000000000000000000"
+      ],
+      "output": "notes[REDACTED:secret.github_token] ok\n"
+    },
+    {
+      "id": "stripe-key-after-literal-newline-escape",
+      "description": "secret.stripe_key stripe key after literal newline escape",
+      "mode": "text",
+      "input": "{\"c\":\"line\\nsk_test_FAKEEXAMPLE00000000\"}\n",
+      "expect": "redacted",
+      "rules": [
+        "secret.stripe_key"
+      ],
+      "absent": [
+        "sk_test_FAKEEXAMPLE00000000"
+      ],
+      "output": "{\"c\":\"line\\n[REDACTED:secret.stripe_key]\"}\n"
     }
   ]
 }
