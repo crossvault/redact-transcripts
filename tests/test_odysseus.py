@@ -148,3 +148,54 @@ def test_cli_format_odysseus(tmp_path):
     assert res.returncode == 0, res.stderr
     assert "format=odysseus" in res.stderr
     assert GH not in dst.read_text()
+
+
+def test_built_in_fields_get_no_exemption():
+    assert not ODYSSEUS.keeps("model", "qwen3:8b")
+    assert not ODYSSEUS.keeps("role", "user")
+
+
+@pytest.mark.parametrize("value", ["jane.doe@mail.test", "10.1.2.3"])
+def test_pii_and_infra_under_field_names_are_redacted_at_any_depth(value):
+    doc = _export(model=value)
+    doc["messages"][1]["content"].append({"type": "tool_use", "input": {"model": value, "role": value}})
+    _, out, _ = _redact(doc)
+    assert value not in out.decode()
+    assert json.loads(out)["messages"][1]["content"][2]["type"] == "tool_use"
+
+
+DEEP = "[\n" + "[" * 100_000 + json.dumps(GH) + "]" * 100_001 + "\n"
+
+
+@pytest.mark.parametrize("fmt", ["auto", "odysseus"])
+def test_too_deeply_nested_input_falls_back_to_text(fmt):
+    out, report = redact_bytes(DEEP.encode(), format=fmt)
+    assert GH not in out.decode()
+    assert report.secrets_found() == 1
+
+
+def test_deeply_nested_line_falls_back_to_text():
+    raw = ("[" * 100_000 + json.dumps(GH) + "]" * 100_000 + "\n").encode()
+    out, _ = redact_bytes(raw, format="odysseus")
+    assert GH not in out.decode()
+
+
+def test_cli_survives_deep_input(tmp_path):
+    src = tmp_path / "deep.json"
+    src.write_text(DEEP)
+    res = subprocess.run(
+        [sys.executable, "-m", "redact_transcripts", str(src)], capture_output=True, text=True
+    )
+    assert res.returncode == 0, res.stderr[-500:]
+    assert GH not in res.stdout
+
+
+def test_tab_indent_and_crlf_are_kept():
+    raw = json.dumps(_export(), indent="\t").replace("\n", "\r\n").encode() + b"\r\n"
+    out, report = redact_bytes(raw, format="odysseus")
+    assert report.secrets_found() >= 1
+    assert out.endswith(b"\r\n")
+    lines = out.split(b"\r\n")
+    assert all(not line.endswith(b"\r") and b"\n" not in line for line in lines)
+    assert lines[1].startswith(b'\t"name"')
+    assert json.loads(out)["model"] == "qwen3:8b"

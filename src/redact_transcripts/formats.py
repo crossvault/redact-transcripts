@@ -184,15 +184,12 @@ CLAUDE_CODE_STRUCTURAL_KEYS: Dict[str, str] = {
     "version": r"\d{1,4}(?:\.\d{1,6}){0,3}(?:[\-+][0-9A-Za-z.\-]{1,32})?",
 }
 
-#: Odysseus session export (``{"name", "model", "exported", "messages": [{"role", "content"}]}``).
-#: ``content`` is a string or a list of parts; a part's ``type`` tag is structure. The session
-#: ``name`` is a user-written title, so it is redacted like content.
-ODYSSEUS_STRUCTURAL_KEYS: Dict[str, str] = {
-    "role": _WORD,
-    "type": _WORD,
-    "model": CLAUDE_CODE_STRUCTURAL_KEYS["model"],
-    "exported": r"\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?(?:Z|[+\-]\d{2}:?\d{2})?",
-}
+#: Fields of an Odysseus session export (``{"name", "model", "exported", "messages":
+#: [{"role", "content"}]}``) whose normal values (``user``, ``text``, ``qwen3:8b``, an ISO time)
+#: no rule matches, so they pass through unchanged. They get no exemption: a value under one of
+#: these keys, at any position, is redacted whenever a rule of any kind (secret, PII, infra)
+#: matches it. The session ``name`` is a user-written title and is redacted like content.
+ODYSSEUS_FIELDS: Tuple[str, ...] = ("role", "type", "model", "exported")
 
 
 def _is_odysseus_export(obj) -> bool:
@@ -201,28 +198,42 @@ def _is_odysseus_export(obj) -> bool:
     return isinstance(obj, dict) and isinstance(obj.get("messages"), list) and "exported" in obj
 
 
-def _json_indent(text: str) -> "int | None":
-    """The indent width of a pretty-printed JSON document, or None if it is on one line."""
+def _loads_document(text: str):
+    """``json.loads`` for a whole document; None if it is not JSON or nests too deeply."""
+    try:
+        return json.loads(text)
+    except (ValueError, RecursionError):
+        return None
+
+
+def _json_indent(text: str) -> "int | str | None":
+    """The indent of a pretty-printed JSON document (a width, or the literal tab/space string),
+    or None if it is on one line."""
     lines = text.strip().split("\n")
     if len(lines) < 2:
         return None
-    second = lines[1]
-    return (len(second) - len(second.lstrip(" "))) or 2
+    second = lines[1].rstrip("\r")
+    lead = second[: len(second) - len(second.lstrip(" \t"))]
+    if not lead:
+        return 2
+    return len(lead) if set(lead) == {" "} else lead
 
 
 class OdysseusFormat(JsonlFormat):
     """An Odysseus session export: one JSON document (pretty-printed or compact), a list of
-    them, or one export per line. Roles, part types, the model and the export time are kept.
+    them, or one export per line.
 
-    The export holds the conversation only, so there is no system prompt or tool schema in it
-    to redact or keep.
+    Every value is redacted like content; see :data:`ODYSSEUS_FIELDS` for why roles, part
+    types, the model and the export time still come out unchanged. ``structural_keys`` (the CLI's
+    ``--keep-key``) adds identifier-shaped fields to keep, as in ``jsonl``. The export holds the
+    conversation only, so there is no system prompt or tool schema in it.
     """
 
     def __init__(
         self,
         name: str = "odysseus",
-        structural_keys: "Iterable[str] | Mapping[str, str]" = ODYSSEUS_STRUCTURAL_KEYS,
-        description: str = "Odysseus session export; roles, part types, model and export time kept",
+        structural_keys: "Iterable[str] | Mapping[str, str]" = (),
+        description: str = "Odysseus session export; roles, part types, model and export time unchanged",
         email_keep_domains: Tuple[str, ...] = (),
     ) -> None:
         super().__init__(name, structural_keys, description, email_keep_domains)
@@ -235,30 +246,41 @@ class OdysseusFormat(JsonlFormat):
     def redact_bytes(self, raw: bytes, redactor: Redactor) -> Tuple[bytes, Report]:
         text = raw.decode(_ENC, _ERRORS)
         body = text[1:] if text.startswith("﻿") else text
-        try:
-            obj = json.loads(body)
-        except ValueError:
-            return super().redact_bytes(raw, redactor)  # one export per line, or not JSON at all
+        obj = _loads_document(body)
         if not isinstance(obj, (dict, list)):
-            return super().redact_bytes(raw, redactor)
-        indent = _json_indent(body)
+            try:
+                return super().redact_bytes(raw, redactor)  # one export per line, or not JSON
+            except RecursionError:
+                return _as_text(raw, redactor, self.name)  # a line nests too deeply
         report = Report(format=self.name, input_sha256=hashlib.sha256(raw).hexdigest())
         redactor.reset()
         report.lines_total = body.count("\n") + (0 if body.endswith("\n") else 1)
         counts: Dict[str, int] = {}
-        redacted = redactor.redact_value(obj, counts, self.keeps)
+        try:
+            redacted = redactor.redact_value(obj, counts, self.keeps)
+        except RecursionError:
+            return _as_text(raw, redactor, self.name)
         report.add(1, counts)
         if not counts:
             out = raw
         else:
+            indent = _json_indent(body)
             if indent is None:
                 new = json.dumps(redacted, ensure_ascii=False, separators=(",", ":"))
             else:
                 new = json.dumps(redacted, ensure_ascii=False, indent=indent)
+            if "\r\n" in body.rstrip():
+                new = new.replace("\n", "\r\n")
             trailing = body[len(body.rstrip()) :]
             out = (text[: len(text) - len(body)] + new + trailing).encode(_ENC, _ERRORS)
         report.output_sha256 = hashlib.sha256(out).hexdigest()
         return out, report
+
+
+def _as_text(raw: bytes, redactor: Redactor, name: str) -> Tuple[bytes, Report]:
+    out, report = TextFormat().redact_bytes(raw, redactor)
+    report.format = name
+    return out, report
 
 
 TEXT = TextFormat()
@@ -309,10 +331,7 @@ def detect_format(raw: bytes) -> Format:
         try:
             obj = json.loads(line)
         except ValueError:
-            try:
-                whole = json.loads(text[1:] if text.startswith("﻿") else text)
-            except ValueError:
-                return TEXT
+            whole = _loads_document(text[1:] if text.startswith("\ufeff") else text)
             return ODYSSEUS if _is_odysseus_export(whole) else TEXT
         if isinstance(obj, dict) and any(k in obj for k in _CLAUDE_CODE_HINTS):
             return CLAUDE_CODE

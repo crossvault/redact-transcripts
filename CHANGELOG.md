@@ -8,14 +8,19 @@ All notable changes are listed here. The format follows
 
 ### Added
 - `odysseus` format for Odysseus session exports (`{"name", "model", "exported", "messages"}`):
-  one JSON document (pretty-printed or compact), a list of them, or one per line. `role`, part
-  `type`, `model` and `exported` are kept when they have the expected shape; the session title
-  and all message content are redacted. The output keeps the input's layout, and a clean file
-  comes out byte-identical. Example: `examples/odysseus-export.json`.
+  one JSON document (pretty-printed or compact), a list of them, or one per line. Every value
+  is redacted like content, with no structural exemption; roles, part types, the model tag and
+  the export time come out unchanged because no rule matches their normal values. A clean file
+  comes out byte-identical; otherwise indentation (spaces or tabs), line endings and BOM are
+  kept. Input that nests too deeply to parse is redacted as plain text. Example:
+  `examples/odysseus-export.json`.
 
 ### Changed
 - `--format auto` recognises an Odysseus export, including a pretty-printed one (which it used
-  to treat as plain text). Detection for every other input is unchanged.
+  to treat as plain text). A JSON Lines file whose first line looks like an export (a `messages`
+  list and an `exported` key) is now detected as `odysseus` instead of `jsonl`; its redaction is
+  the same unless you pass `--keep-key`. A multi-line input that is not JSON, or nests too deeply
+  to parse, is still detected as `text`.
 
 ## [0.2.0] - unreleased (date set at release)
 

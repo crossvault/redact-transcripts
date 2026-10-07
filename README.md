@@ -100,8 +100,10 @@ under a key like `id` or `model` anywhere in a tool's input is still redacted.
 ### Odysseus session exports
 
 A session exported from [Odysseus](https://github.com/odysseus-dev/odysseus) is one JSON document
-(`name`, `model`, `exported`, `messages`). Redact it before you share it; roles, part types, the
-model and the export time stay as they are, and the session title is redacted like content:
+(`name`, `model`, `exported`, `messages`). Redact it before you share it. Every value is
+redacted like content, the session title included; roles, part types, the model tag and the export
+time come out unchanged because no rule matches their normal values (an e-mail address or IP
+address stored there is still redacted):
 
 <!-- readme-test -->
 ```console
@@ -112,9 +114,11 @@ redact-transcripts: format=odysseus lines=20 changed=1 redacted=3
   secret.github_token  1
 ```
 
-The output keeps the input's layout (pretty-printed or compact), and a file with nothing to
-redact comes out byte-identical. A list of exports, or one export per line, works too. The export
-holds the conversation only; a system prompt or tool schemas are not in it.
+A file with nothing to redact comes out byte-identical. Otherwise the output keeps the input's
+indentation (spaces or tabs, or compact), line endings and BOM; spacing inside a line and string
+escaping are normalised. A list of exports, or one export per line, works too. Input that nests
+too deeply to parse is redacted as plain text. The export holds the conversation only; a system
+prompt or tool schemas are not in it.
 
 Recording model traffic with a local proxy that writes JSON Lines instead? Pipe its file through
 `redact-transcripts --format jsonl`, adding `--keep-key KEY` for each id field you need intact.
@@ -240,7 +244,7 @@ redactor = Redactor(
 | `auto` (default) | picks one of the below from the first non-empty line (or, for one JSON document over several lines, from the whole input) | |
 | `claude-code` | Claude Code session transcripts | `sessionId`, `uuid`, `parentUuid`, `id`, `tool_use_id`, `timestamp`, `type`, `role`, `model`, …, each only with its expected value shape |
 | `jsonl` | any JSON Lines file | none; `--keep-key KEY` keeps identifier-shaped values under KEY |
-| `odysseus` | Odysseus session exports (one JSON document, a list of them, or one per line) | `role`, `type`, `model`, `exported`, each only with its expected value shape |
+| `odysseus` | Odysseus session exports (one JSON document, a list of them, or one per line) | none; `--keep-key KEY` as for `jsonl` |
 | `text` | logs, notes, anything else; streams from stdin | n/a |
 
 In the JSON formats both values **and object keys** are redacted, and a line that is not JSON is
