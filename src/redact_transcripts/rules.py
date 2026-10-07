@@ -14,9 +14,10 @@ from __future__ import annotations
 
 import base64
 import binascii
+import bisect
 import re
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Callable, List, Optional
+from typing import TYPE_CHECKING, Callable, List, Optional, Tuple
 
 if TYPE_CHECKING:  # pragma: no cover
     from .engine import Redactor
@@ -253,6 +254,349 @@ class Base64Rule(Rule):
         return rep
 
 
+# --- Vendor token shapes -------------------------------------------------------------------------
+#
+# A vendor token is recognised in five positions (the named groups of a VendorKeyRule):
+#
+# * ``plain``: after a word boundary (prose, ``key=…``, a JSON string);
+# * ``us``: right after ``_`` (``CONF_ghp_…``) or a URL escape (``?k=%20AKIA…``), where ``\b`` never fires;
+# * ``sep``: right after ``+``, ``/`` or a URL escape (the newer, ``v2`` shapes only);
+# * ``esc``: right after a literal ``\n``, ``\r`` or ``\t`` escape (a token at the start of a line in
+#   raw JSON text), whose letter is a word character;
+# * ``glued``: glued straight onto a letter or digit (``notesghp_…``), exact vendor shape only.
+#
+# Outside ``plain`` the surroundings look like an identifier, so the body must look random (mixed
+# case, or digit-dense): ``slack_xoxb-tokens-and-scopes-guide`` stays a name. A classic token may end
+# right before ``_`` (``ghp_…_notes``) unless that ``_`` opens the next token; one followed by ``_``
+# must look random too, so ``sk_test_mode_runner_config`` stays a name. Nothing inside base64 or a
+# ``data:`` URI is redacted, so binary data is never corrupted.
+#
+# Every body run is bounded and followed by something it cannot contain, so each rule stays linear.
+
+_CLASSIC_PFX = r"gh[pousr]_|github_pat_|sk-|xox[abposr]-|AKIA|ASIA|(?:sk|rk)_(?:live|test)_|whsec_"
+_V2_PFX = r"sk-(?:proj|svcacct|admin|or-v1)-|AIza|ya29\.|1//|GOCSPX-|gsk_|xai-"
+_US_BODY = r"(?:[A-Za-z0-9-]|_(?!" + _CLASSIC_PFX + "|" + _V2_PFX + r"))"
+_V2_US_BODY = r"(?:[A-Za-z0-9-]|_(?!" + _V2_PFX + r"))"
+# Where a classic token ends: a word boundary, or right before ``_`` unless that ``_`` opens the next
+# token together with the letters before it (``xoxb-notes-ghp_…``).
+_CLS_END = r"(?:\b|(?=_)(?!(?<=gh[pousr])_|(?<=github)_pat_|(?<=[sr]k)_(?:live|test)_|(?<=whsec)_|(?<=gsk)_))"
+# A newer-shape body never contains `/`, `+` or `=`, so a token may end right before one
+# (`…/keys/gsk_<key>/rotate`). Binary data is excluded by `binary_spans`, not by this end.
+_V2_END = r"(?![A-Za-z0-9_-])"
+_PFX_RE = re.compile(_CLASSIC_PFX + "|" + _V2_PFX)
+_WORDY_PFX = re.compile(r"xox[abposr]-|sk-ant-|github_pat_")
+_UPPER = re.compile(r"[A-Z]")
+_LOWER = re.compile(r"[a-z]")
+_DIGIT = re.compile(r"[0-9]")
+
+
+def _v2_body_like_key(body: str) -> bool:
+    """A newer-shape key body, not a word run: it mixes upper and lower case, or it is a digit-dense
+    run without ``-``/``_`` (4+ digits that make up a quarter of it). A URL path such as
+    ``xai-api-reference-v2-2024-guide`` stays a word."""
+    if _UPPER.search(body) and _LOWER.search(body):
+        return True
+    if "-" in body or "_" in body:
+        return False
+    d = len(_DIGIT.findall(body))
+    return d >= 4 and d * 4 >= len(body)
+
+
+def _classic_body_like_key(body: str) -> bool:
+    """A classic key body: any upper-case letter, or 4+ digits making up a quarter of its letters and
+    digits. Only an all-lower-case, digit-light run (``notes-for-docs``) stays a name."""
+    if _UPPER.search(body):
+        return True
+    alnum = len(body) - body.count("-") - body.count("_")
+    d = len(_DIGIT.findall(body))
+    return d >= 4 and d * 4 >= alnum
+
+
+_V2_PFX_RE = re.compile(_V2_PFX)
+
+
+def _strip_prefix(token: str, pfx: "re.Pattern[str]" = _PFX_RE) -> str:
+    p = pfx.match(token)
+    return token[p.end() :] if p else token
+
+
+# Binary data: a ``data:…;base64,`` URI, a 200+ character base64 run, or base64 wrapped at 64 or 76
+# columns with escaped line breaks (``\n`` inside a JSON string). Real line breaks are not joined, so
+# redacting a stream line by line gives the same result as redacting the whole text.
+_DATA_URI = re.compile(r"data:[A-Za-z0-9.+/-]{1,64}(?:;[A-Za-z0-9=._-]{1,64}){0,4};base64,[A-Za-z0-9+/=]*")
+_B64_RUN = re.compile(r"(?<![A-Za-z0-9+/=])[A-Za-z0-9+/=]{200,}")
+_PATH_PREFIX = re.compile(r"(?:/[A-Za-z0-9+=]{1,64}){1,32}/")
+_WRAP_SEP = r"(?:(?:\\{1,2}r)?\\{1,2}n)"
+
+
+def _wrapped(w: int) -> str:
+    line, sep = "[A-Za-z0-9+/]{" + str(w) + "}", _WRAP_SEP
+    tail = "(?:" + sep + "[A-Za-z0-9+/]{0," + str(w - 1) + "}={1,2})?"
+    last = line + tail + "|[A-Za-z0-9+/]{" + str(w - 1) + "}=|[A-Za-z0-9+/]{" + str(w - 2) + "}=="
+    return "(?:" + line + sep + "){2,}(?:" + last + ")(?![A-Za-z0-9+/=])"
+
+
+_B64_WRAPPED = re.compile(
+    r"(?:(?<![A-Za-z0-9+/=])|(?<=\\n)|(?<=\\r))(?:" + _wrapped(76) + "|" + _wrapped(64) + ")"
+)
+
+
+def _looks_binary(run: str) -> bool:
+    return bool(_UPPER.search(run) and _LOWER.search(run) and _DIGIT.search(run))
+
+
+def binary_spans(text: str) -> List[Tuple[int, int]]:
+    """Sorted, disjoint ``(start, end)`` spans of base64 / data-URI binary data in ``text``."""
+    spans = [m.span() for m in _DATA_URI.finditer(text)]
+    for m in _B64_RUN.finditer(text):
+        run, start = m.group(0), m.start()
+        if run[0] == "/":  # a leading path (``/home/user/<base64 name>``) is not binary data
+            pm = _PATH_PREFIX.match(run)
+            if pm:
+                run, start = run[pm.end() - 1 :], start + pm.end() - 1
+                if len(run) < 200:
+                    continue
+        if "+" in run and run.count("/") * 16 < len(run) and _looks_binary(run):
+            spans.append((start, m.end()))
+    for m in _B64_WRAPPED.finditer(text):
+        run = m.group(0)
+        if ("+" in run or "/" in run) and _looks_binary(run):
+            spans.append(m.span())
+    spans.sort()
+    merged: List[Tuple[int, int]] = []
+    for s, e in spans:
+        if merged and s <= merged[-1][1]:
+            merged[-1] = (merged[-1][0], max(merged[-1][1], e))
+        else:
+            merged.append((s, e))
+    return merged
+
+
+def _in_spans(spans: List[Tuple[int, int]], s: int, e: int) -> bool:
+    i = bisect.bisect_right(spans, (s, float("inf"))) - 1
+    return i >= 0 and spans[i][1] >= e
+
+
+_POSITIONS = ("plain", "us", "sep", "esc", "glued", "usc", "escc")
+# ``usc``/``escc``: the classic-kind alternatives (``sk-<alnum>``) of a newer-kind rule.
+_CLASSIC_ALT = {"usc": "us", "escc": "esc"}
+
+
+@dataclass(frozen=True)
+class VendorKeyRule(Rule):
+    """A vendor token shape, recognised in every position listed above. ``kind`` is ``classic`` or
+    ``v2`` and picks the body test for the identifier-like positions."""
+
+    kind: str = "classic"
+    #: ``v2``: the body after the newer-shape prefix must look random in every position, plain
+    #: included (shapes that also read as code or a package name: ``1//``, ``xai-``, ``gsk_`` …).
+    #: ``dot``: the part after the last ``.`` must look random (``<32 hex>.<16 chars>``).
+    strict: str = ""
+
+    def accepts(self, m: "re.Match[str]", group: str) -> bool:
+        token = m.group(group)
+        body = _strip_prefix(token)
+        if group == "glued":
+            return _classic_body_like_key(body)
+        if self.strict == "v2" and not _v2_body_like_key(_strip_prefix(token, _V2_PFX_RE)):
+            return False
+        if self.strict == "dot" and not _v2_body_like_key(token.rsplit(".", 1)[-1]):
+            return False
+        if self.kind != "classic" and group not in _CLASSIC_ALT:
+            return group not in ("us", "sep") or _v2_body_like_key(_strip_prefix(token, _V2_PFX_RE))
+        group_name, group = group, _CLASSIC_ALT.get(group, group)
+        if m.string[m.end(group_name) : m.end(group_name) + 1] == "_" and not _classic_body_like_key(body):
+            return False
+        if group == "us":
+            w = _WORDY_PFX.match(token)
+            if w and not _classic_body_like_key(token[w.end() :]):
+                return False
+        return True
+
+    def bind(self, redactor: "Redactor") -> Replacer:
+        marker = redactor.marker(self.name)
+        # The binary spans of the last text seen: one pass per text, keyed by identity, never held.
+        cache: List[Tuple[Tuple[int, int, int], List[Tuple[int, int]]]] = []
+
+        def rep(m: "re.Match[str]") -> str:
+            group = next(g for g in _POSITIONS if m.groupdict().get(g) is not None)
+            if not self.accepts(m, group):
+                return m.group(0)
+            s = m.string
+            key = (id(s), len(s), hash(s))
+            if not cache or cache[0][0] != key:
+                cache[:] = [(key, binary_spans(s))]
+            if _in_spans(cache[0][1], m.start(group), m.end(group)):
+                return m.group(0)
+            return s[m.start() : m.start(group)] + marker + s[m.end(group) : m.end()]
+
+        return rep
+
+
+def _vendor(
+    name: str,
+    *,
+    kind: str,
+    plain: str,
+    us: Optional[str] = None,
+    sep: Optional[str] = None,
+    esc: Optional[str] = None,
+    glued: Optional[str] = None,
+    us_classic: Optional[str] = None,
+    esc_classic: Optional[str] = None,
+    strict: str = "",
+) -> VendorKeyRule:
+    """Build a :class:`VendorKeyRule`. ``plain`` carries its own start and end; the other shapes get
+    the start of their position and the end of their kind."""
+    end = _CLS_END if kind == "classic" else _V2_END
+    parts = [r"(?P<plain>" + plain + r")"]
+    if us:
+        parts.append(r"(?:(?<=_)|(?<=%[0-9A-Fa-f]{2}))(?P<us>" + us + r")" + end)
+    if sep:
+        parts.append(r"(?:(?<=[+/])|(?<=%[0-9A-Fa-f]{2}))(?P<sep>" + sep + r")" + end)
+    if esc:
+        parts.append(r"(?<=\\[nrt])(?P<esc>" + esc + r")" + end)
+    if glued:
+        parts.append(r"(?<=[A-Za-z0-9])(?P<glued>" + glued + r")(?![A-Za-z0-9])")
+    if us_classic:
+        parts.append(r"(?:(?<=_)|(?<=%[0-9A-Fa-f]{2}))(?P<usc>" + us_classic + r")" + _CLS_END)
+    if esc_classic:
+        parts.append(r"(?<=\\[nrt])(?P<escc>" + esc_classic + r")" + _CLS_END)
+    return VendorKeyRule(name, re.compile("|".join(parts)), kind=kind, strict=strict)
+
+
+def _v2_plain(shape: str) -> str:
+    return r"(?<![A-Za-z0-9+/_-])(?:" + shape + r")" + _V2_END
+
+
+def vendor_rules() -> List[VendorKeyRule]:
+    """The vendor token shapes, most specific first (``sk-ant-`` before ``sk-or-v1-`` before ``sk-``)."""
+    return [
+        _vendor(
+            "secret.anthropic_key",
+            kind="classic",
+            plain=r"\bsk-ant-[A-Za-z0-9_\-]{10,4096}",
+            us=r"sk-ant-" + _US_BODY + r"{12,256}",
+            esc=r"sk-ant-[A-Za-z0-9_-]{12,4096}",
+            glued=r"sk-ant-(?:api|admin|oat|ort)[0-9]{2}-[A-Za-z0-9_-]{40,256}",
+        ),
+        _vendor(
+            "secret.openrouter_key",
+            kind="v2",
+            plain=_v2_plain(r"sk-or-v1-[A-Za-z0-9_-]{20,4096}"),
+            us=r"sk-or-v1-" + _V2_US_BODY + r"{20,256}",
+            sep=r"sk-or-v1-[A-Za-z0-9_-]{20,4096}",
+            esc=r"sk-or-v1-[A-Za-z0-9_-]{20,4096}",
+            glued=r"sk-or-v1-[A-Za-z0-9_-]{40,256}",
+        ),
+        _vendor(
+            "secret.openai_key",
+            kind="v2",
+            plain=r"\bsk-(?:proj-|svcacct-|admin-)?[A-Za-z0-9_\-]{20,4096}",
+            us=r"sk-(?:proj|svcacct|admin)-" + _V2_US_BODY + r"{20,256}",
+            sep=r"sk-(?:proj|svcacct|admin)-[A-Za-z0-9_-]{20,4096}",
+            esc=r"sk-(?:proj|svcacct|admin)-[A-Za-z0-9_-]{20,4096}",
+            us_classic=r"sk-[A-Za-z0-9]{20,4096}",
+            esc_classic=r"sk-[A-Za-z0-9]{20,4096}",
+            glued=r"sk-(?:proj|svcacct|admin)-[A-Za-z0-9_-]{40,256}|sk-[A-Za-z0-9]{48}",
+        ),
+        _vendor(
+            "secret.github_token",
+            kind="classic",
+            plain=r"\b(?:gh[pousr]_[A-Za-z0-9]{20,4096}|github_pat_[A-Za-z0-9_]{20,4096})" + _CLS_END,
+            us=r"gh[pousr]_[A-Za-z0-9]{20,4096}|github_pat_" + _US_BODY + r"{20,256}",
+            esc=r"gh[pousr]_[A-Za-z0-9]{20,4096}|github_pat_[A-Za-z0-9_]{20,4096}",
+            glued=r"gh[pousr]_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9]{22}_[A-Za-z0-9]{59}",
+        ),
+        _vendor("secret.gitlab_token", kind="classic", plain=r"\bglpat-[A-Za-z0-9_\-]{20,4096}"),
+        _vendor(
+            "secret.slack_token",
+            kind="classic",
+            plain=r"\bxox[abposr]-[A-Za-z0-9\-]{10,4096}",
+            us=r"xox[abposr]-[A-Za-z0-9-]{10,4096}",
+            esc=r"xox[abposr]-[A-Za-z0-9-]{10,4096}",
+            glued=r"xox[abposr]-[0-9]{1,16}-[A-Za-z0-9-]{10,256}",
+        ),
+        _vendor(
+            "secret.aws_key_id",
+            kind="classic",
+            plain=r"\b(?:AKIA|ASIA)[0-9A-Z]{16}" + _CLS_END,
+            us=r"(?:AKIA|ASIA)[0-9A-Z]{16}",
+            esc=r"(?:AKIA|ASIA)[0-9A-Z]{16}",
+            glued=r"(?:AKIA|ASIA)[0-9A-Z]{16}",
+        ),
+        _vendor(
+            "secret.google_api_key",
+            kind="v2",
+            plain=r"\bAIza[0-9A-Za-z_\-]{35}",
+            us=r"AIza" + _V2_US_BODY + r"{35}",
+            sep=r"AIza[0-9A-Za-z_-]{35}",
+            esc=r"AIza[0-9A-Za-z_-]{35}",
+        ),
+        _vendor(
+            "secret.google_oauth_token",
+            kind="v2",
+            # Refresh tokens start `1//0`; `n = 1//batch_size` is floor division.
+            plain=_v2_plain(r"ya29\.[0-9A-Za-z_-]{20,4096}|1//0[0-9A-Za-z_-]{30,4096}"),
+            us=r"ya29\." + _V2_US_BODY + r"{20,4096}|1//0" + _V2_US_BODY + r"{30,4096}",
+            sep=r"ya29\.[0-9A-Za-z_-]{20,4096}|1//0[0-9A-Za-z_-]{30,4096}",
+            esc=r"ya29\.[0-9A-Za-z_-]{20,4096}|1//0[0-9A-Za-z_-]{30,4096}",
+            strict="v2",
+        ),
+        _vendor(
+            "secret.google_oauth_client_secret",
+            kind="v2",
+            plain=_v2_plain(r"GOCSPX-[0-9A-Za-z_-]{20,256}"),
+            us=r"GOCSPX-" + _V2_US_BODY + r"{20,256}",
+            sep=r"GOCSPX-[0-9A-Za-z_-]{20,256}",
+            esc=r"GOCSPX-[0-9A-Za-z_-]{20,256}",
+            strict="v2",
+        ),
+        _vendor(
+            "secret.groq_key",
+            kind="v2",
+            plain=_v2_plain(r"gsk_[A-Za-z0-9_-]{20,4096}"),
+            us=r"gsk_" + _V2_US_BODY + r"{20,256}",
+            sep=r"gsk_[A-Za-z0-9_-]{20,4096}",
+            esc=r"gsk_[A-Za-z0-9_-]{20,4096}",
+            strict="v2",
+        ),
+        _vendor(
+            "secret.xai_key",
+            kind="v2",
+            plain=_v2_plain(r"xai-[A-Za-z0-9_-]{20,4096}"),
+            us=r"xai-" + _V2_US_BODY + r"{20,256}",
+            sep=r"xai-[A-Za-z0-9_-]{20,4096}",
+            esc=r"xai-[A-Za-z0-9_-]{20,4096}",
+            strict="v2",
+        ),
+        _vendor(
+            "secret.stripe_key",
+            kind="classic",
+            plain=r"\b[rs]k_(?:live|test)_[A-Za-z0-9]{16,4096}" + _CLS_END,
+            us=r"[rs]k_(?:live|test)_[A-Za-z0-9]{16,4096}",
+            esc=r"[rs]k_(?:live|test)_[A-Za-z0-9]{16,4096}",
+            glued=r"[rs]k_(?:live|test)_[A-Za-z0-9]{24,256}",
+        ),
+        _vendor(
+            "secret.stripe_webhook_secret",
+            kind="classic",
+            plain=r"\bwhsec_[A-Za-z0-9]{16,4096}" + _CLS_END,
+            us=r"whsec_[A-Za-z0-9]{16,4096}",
+            esc=r"whsec_[A-Za-z0-9]{16,4096}",
+            glued=r"whsec_[A-Za-z0-9]{32,256}",
+        ),
+        _vendor(
+            "secret.zai_key",
+            kind="classic",
+            plain=r"\b[0-9a-f]{32}\.[A-Za-z0-9]{16}" + _CLS_END,
+            us=r"[0-9a-f]{32}\.[A-Za-z0-9]{16}",
+            esc=r"[0-9a-f]{32}\.[A-Za-z0-9]{16}",
+            strict="dot",
+        ),
+    ]
+
+
 def default_rules() -> List[Rule]:
     """The built-in rule set, in order. Specific token shapes run before generic ones, so a known
     token is reported under its own rule rather than as a generic assignment."""
@@ -264,17 +608,7 @@ def default_rules() -> List[Rule]:
                 re.DOTALL,
             ),
         ),
-        Rule("secret.anthropic_key", re.compile(r"\bsk-ant-[A-Za-z0-9_\-]{10,}")),
-        Rule("secret.openai_key", re.compile(r"\bsk-(?:proj-|svcacct-|admin-)?[A-Za-z0-9_\-]{20,}")),
-        Rule(
-            "secret.github_token",
-            re.compile(r"\b(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})"),
-        ),
-        Rule("secret.gitlab_token", re.compile(r"\bglpat-[A-Za-z0-9_\-]{20,}")),
-        Rule("secret.slack_token", re.compile(r"\bxox[abposr]-[A-Za-z0-9\-]{10,}")),
-        Rule("secret.aws_key_id", re.compile(r"\b(?:AKIA|ASIA)[0-9A-Z]{16}\b")),
-        Rule("secret.google_api_key", re.compile(r"\bAIza[0-9A-Za-z_\-]{35}")),
-        Rule("secret.stripe_key", re.compile(r"\b[rs]k_(?:live|test)_[A-Za-z0-9]{16,}")),
+        *vendor_rules(),
         Rule("secret.jwt", re.compile(r"\beyJ[A-Za-z0-9_\-]{8,}\.[A-Za-z0-9_\-]{8,}\.[A-Za-z0-9_\-]{8,}")),
         Base64Rule(
             "secret.base64_encoded",

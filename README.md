@@ -176,7 +176,7 @@ same result as redacting once.
 | Rule | Catches |
 |---|---|
 | `secret.private_key` | PEM `-----BEGIN … PRIVATE KEY-----` blocks (multi-line) |
-| `secret.anthropic_key`, `secret.openai_key`, `secret.github_token`, `secret.gitlab_token`, `secret.slack_token`, `secret.aws_key_id`, `secret.google_api_key`, `secret.stripe_key`, `secret.jwt` | vendor token shapes |
+| `secret.anthropic_key`, `secret.openrouter_key`, `secret.openai_key`, `secret.github_token`, `secret.gitlab_token`, `secret.slack_token`, `secret.aws_key_id`, `secret.google_api_key`, `secret.google_oauth_token`, `secret.google_oauth_client_secret`, `secret.groq_key`, `secret.xai_key`, `secret.stripe_key`, `secret.stripe_webhook_secret`, `secret.zai_key`, `secret.jwt` | vendor token shapes, also right after `_`, a URL escape (`%20`) or a literal `\n`, glued onto text (exact shape), and followed by `_<word>`; an identifier-shaped run (`slack_xoxb-tokens-and-scopes-guide`) is kept, and nothing inside base64 or a `data:` URI is rewritten |
 | `secret.base64_encoded` | a base64 blob whose decoded text contains one of the secrets above (one level) |
 | `secret.bearer`, `secret.basic_auth` | `Bearer …` / `Basic …` credentials (the scheme is kept) |
 | `secret.auth_header` | `Authorization: token …` and other schemes (`digest`, `apikey`, `key`, `sso-key` …) |

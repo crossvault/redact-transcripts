@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import re
 from dataclasses import dataclass, field
 from typing import Callable, Dict, FrozenSet, Iterable, List, Optional, Sequence, Tuple
@@ -153,36 +154,71 @@ class Redactor:
             return self.redact_text(value, counts)
         if isinstance(value, list):
             return [self.redact_value(x, counts, keep) for x in value]
+        if isinstance(value, DuplicateKeyObject):
+            pairs = [
+                (self.redact_text(k, counts), self._member(k, x, value, counts, keep)) for k, x in value.pairs
+            ]
+            return DuplicateKeyObject(pairs)
         if isinstance(value, dict):
             out = {}
             for k, x in value.items():
                 nk = self.redact_text(k, counts)
                 while nk in out:  # two keys redacted to the same marker: keep both
                     nk += "_"
-                if isinstance(x, str) and keep is not None and keep(k, x) and not self.contains_secret(x):
-                    out[nk] = x
-                elif (
-                    isinstance(x, str)
-                    and self.people is not None
-                    and (person := self.people.keyed(k, x, value.keys()))
-                ):
-                    counts[KEYED_PERSON] = counts.get(KEYED_PERSON, 0) + 1
-                    out[nk] = person
-                elif self.keyed_value_enabled and _keyed_secret(k, x):
-                    counts[KEYED_VALUE] = counts.get(KEYED_VALUE, 0) + 1
-                    out[nk] = self.marker(KEYED_VALUE)
-                elif self.keyed_value_enabled and is_secret_key(k) and isinstance(x, list):
-                    out[nk] = [self._keyed_item(k, i, counts, keep) for i in x]
-                else:
-                    out[nk] = self.redact_value(x, counts, keep)
+                out[nk] = self._member(k, x, value, counts, keep)
             return out
         return value
+
+    def _member(self, k: str, x, obj, counts: Dict[str, int], keep):
+        """The redacted value of the member ``k: x`` of the JSON object ``obj``."""
+        if isinstance(x, str) and keep is not None and keep(k, x) and not self.contains_secret(x):
+            return x
+        if isinstance(x, str) and self.people is not None and (person := self.people.keyed(k, x, obj.keys())):
+            counts[KEYED_PERSON] = counts.get(KEYED_PERSON, 0) + 1
+            return person
+        if self.keyed_value_enabled and _keyed_secret(k, x):
+            counts[KEYED_VALUE] = counts.get(KEYED_VALUE, 0) + 1
+            return self.marker(KEYED_VALUE)
+        if self.keyed_value_enabled and is_secret_key(k) and isinstance(x, list):
+            return [self._keyed_item(k, i, counts, keep) for i in x]
+        return self.redact_value(x, counts, keep)
 
     def _keyed_item(self, key: str, item, counts: Dict[str, int], keep):
         if _keyed_secret(key, item):
             counts[KEYED_VALUE] = counts.get(KEYED_VALUE, 0) + 1
             return self.marker(KEYED_VALUE)
         return self.redact_value(item, counts, keep)
+
+
+class DuplicateKeyObject(dict):
+    """A JSON object that repeats a key. As a dict it holds the last value of each key, which is what
+    :func:`json.loads` returns; :attr:`pairs` keeps every member in order, so every occurrence is
+    scanned and written back."""
+
+    def __init__(self, pairs: List[Tuple[str, object]]) -> None:
+        super().__init__(pairs)
+        self.pairs = list(pairs)
+
+
+def json_object_pairs(pairs: List[Tuple[str, object]]) -> dict:
+    """``object_pairs_hook`` for :func:`json.loads` that scans every occurrence of duplicate JSON
+    keys: a plain dict, or a :class:`DuplicateKeyObject` when a key repeats."""
+    obj = dict(pairs)
+    return obj if len(obj) == len(pairs) else DuplicateKeyObject(pairs)
+
+
+def json_dumps(value) -> str:
+    """Compact JSON (``separators=(",", ":")``, no ASCII escaping) that writes out every member of a
+    :class:`DuplicateKeyObject`."""
+    if isinstance(value, DuplicateKeyObject):
+        members = value.pairs
+    elif isinstance(value, dict):
+        members = list(value.items())
+    elif isinstance(value, list):
+        return "[" + ",".join(json_dumps(x) for x in value) + "]"
+    else:
+        return json.dumps(value, ensure_ascii=False)
+    return "{" + ",".join(json.dumps(k, ensure_ascii=False) + ":" + json_dumps(x) for k, x in members) + "}"
 
 
 def _keyed_secret(key: str, value) -> bool:

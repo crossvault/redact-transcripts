@@ -23,7 +23,7 @@ import json
 import re
 from typing import Dict, FrozenSet, Iterable, List, Mapping, Optional, Tuple
 
-from .engine import Config, Redactor, Report, StreamRedactor, opens_private_key
+from .engine import Config, Redactor, Report, StreamRedactor, json_dumps, json_object_pairs, opens_private_key
 
 #: Default shape for a structural value: a short identifier without spaces, ``=`` or ``:``.
 IDENTIFIER_SHAPE = r"[A-Za-z0-9_.\-]{1,128}"
@@ -132,8 +132,8 @@ class JsonlFormat(Format):
             body, cr = (line[:-1], "\r") if line.endswith("\r") else (line, "")
             counts: Dict[str, int] = {}
             try:
-                obj = json.loads(body)
-            except ValueError:
+                obj = json.loads(body, object_pairs_hook=json_object_pairs)
+            except (ValueError, RecursionError):
                 report.non_json_lines += 1
                 block = [line]
                 while opens_private_key("\n".join(block)) and i < len(lines):
@@ -142,12 +142,12 @@ class JsonlFormat(Format):
                     report.lines_total += 1
                 new = redactor.redact_text("\n".join(block), counts)
             else:
-                redacted = redactor.redact_value(obj, counts, self.keeps)
-                new = (
-                    line
-                    if not counts
-                    else (json.dumps(redacted, ensure_ascii=False, separators=(",", ":")) + cr)
-                )
+                try:
+                    redacted = redactor.redact_value(obj, counts, self.keeps)
+                    new = line if not counts else json_dumps(redacted) + cr
+                except RecursionError:  # nested too deep to rebuild: redact the line as text
+                    counts = {}
+                    new = redactor.redact_text(line, counts)
             report.add(line_no, counts)
             out.append(new)
         result = ("\n".join(out) + ("\n" if trailing_newline else "")).encode(_ENC, _ERRORS)
@@ -227,6 +227,8 @@ def detect_format(raw: bytes) -> Format:
             continue
         try:
             obj = json.loads(line)
+        except RecursionError:
+            return JSONL
         except ValueError:
             return TEXT
         if isinstance(obj, dict) and any(k in obj for k in _CLAUDE_CODE_HINTS):
