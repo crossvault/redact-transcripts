@@ -14,7 +14,7 @@ parent links, and can be shared or archived. (Paths such as `cwd` do lose the us
 - **Stdlib only**, Python 3.9+. No dependencies, no network.
 - **Structure-aware.** JSONL is parsed and redacted *after* decoding, so JSON escaping cannot hide
   a secret, and the output is always valid JSON. Lines with nothing to redact keep their exact bytes.
-- **Pluggable formats.** Built in: `claude-code`, `jsonl`, `text`. Add your own in a few lines.
+- **Pluggable formats.** Built in: `claude-code`, `jsonl`, `odysseus`, `text`. Add your own in a few lines.
 - **Streams.** Redact a log tail or a streamed response chunk by chunk; a secret cut in half by a
   chunk boundary is still caught.
 - **Reports never contain secrets**, only rule names, counts and line numbers.
@@ -97,6 +97,32 @@ conversation tree is intact. A structural field is kept only when its value has 
 shape (a UUID, an identifier, a timestamp) **and** no secret rule matches it, so a token stored
 under a key like `id` or `model` anywhere in a tool's input is still redacted.
 
+### Odysseus session exports
+
+A session exported from [Odysseus](https://github.com/odysseus-dev/odysseus) is one JSON document
+(`name`, `model`, `exported`, `messages`). Redact it before you share it. Every value is
+redacted like content, the session title included; roles, part types, the model tag and the export
+time come out unchanged because no rule matches their normal values (an e-mail address or IP
+address stored there is still redacted):
+
+<!-- readme-test -->
+```console
+$ redact-transcripts examples/odysseus-export.json -o export.redacted.json --report
+redact-transcripts: format=odysseus lines=20 changed=1 redacted=3
+  infra.ipv4           1
+  pii.email            1
+  secret.github_token  1
+```
+
+A file with nothing to redact comes out byte-identical. Otherwise the output keeps the input's
+indentation (spaces or tabs, or compact), line endings and BOM; spacing inside a line and string
+escaping are normalised. A list of exports, or one export per line, works too. Input that nests
+too deeply to parse is redacted as plain text. The export holds the conversation only; a system
+prompt or tool schemas are not in it.
+
+Recording model traffic with a local proxy that writes JSON Lines instead? Pipe its file through
+`redact-transcripts --format jsonl`, adding `--keep-key KEY` for each id field you need intact.
+
 ### Python API
 
 ```python
@@ -106,7 +132,7 @@ redact_text("export DB_PASSWORD=FAKE-hunter2")
 # 'export DB_PASSWORD=[REDACTED:secret.assignment]'
 
 with open("session.jsonl", "rb") as f:
-    out, report = redact_bytes(f.read(), format="claude-code")  # or "auto", "jsonl", "text"
+    out, report = redact_bytes(f.read(), format="claude-code")  # or "auto", "jsonl", "odysseus", "text"
 print(report.as_dict()["rules"])  # counts per rule, no values
 
 stream = StreamRedactor()  # e.g. for a streamed model response
@@ -215,9 +241,10 @@ redactor = Redactor(
 
 | `--format` | Use for | Structural fields (never rewritten) |
 |---|---|---|
-| `auto` (default) | picks one of the below from the first non-empty line | |
+| `auto` (default) | picks one of the below from the first non-empty line (or, for one JSON document over several lines, from the whole input) | |
 | `claude-code` | Claude Code session transcripts | `sessionId`, `uuid`, `parentUuid`, `id`, `tool_use_id`, `timestamp`, `type`, `role`, `model`, …, each only with its expected value shape |
 | `jsonl` | any JSON Lines file | none; `--keep-key KEY` keeps identifier-shaped values under KEY |
+| `odysseus` | Odysseus session exports (one JSON document, a list of them, or one per line) | none; `--keep-key KEY` as for `jsonl` |
 | `text` | logs, notes, anything else; streams from stdin | n/a |
 
 In the JSON formats both values **and object keys** are redacted, and a line that is not JSON is
@@ -300,7 +327,7 @@ file-argument position only.
 redacted (the safe direction). Keep a whole domain with `Config(email_keep_domains=...)` or turn
 the rule off with `--disable pii.email`.
 
-Performance: about 4–5 MB/s. The `auto`, `jsonl` and `claude-code` formats read the whole input
+Performance: about 4–5 MB/s. The `auto`, `jsonl`, `claude-code` and `odysseus` formats read the whole input
 into memory; `--format text` streams.
 
 Review redacted output before you share it.
