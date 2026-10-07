@@ -142,12 +142,17 @@ class JsonlFormat(Format):
                     report.lines_total += 1
                 new = redactor.redact_text("\n".join(block), counts)
             else:
-                redacted = redactor.redact_value(obj, counts, self.keeps)
-                new = (
-                    line
-                    if not counts
-                    else (json.dumps(redacted, ensure_ascii=False, separators=(",", ":")) + cr)
-                )
+                try:
+                    redacted = redactor.redact_value(obj, counts, self.keeps)
+                    new = (
+                        line
+                        if not counts
+                        else (json.dumps(redacted, ensure_ascii=False, separators=(",", ":")) + cr)
+                    )
+                except RecursionError:  # nests too deeply to walk: redact the line as text
+                    counts = {}
+                    report.non_json_lines += 1
+                    new = redactor.redact_text(line, counts)
             report.add(line_no, counts)
             out.append(new)
         result = ("\n".join(out) + ("\n" if trailing_newline else "")).encode(_ENC, _ERRORS)
@@ -192,10 +197,15 @@ CLAUDE_CODE_STRUCTURAL_KEYS: Dict[str, str] = {
 ODYSSEUS_FIELDS: Tuple[str, ...] = ("role", "type", "model", "exported")
 
 
-def _is_odysseus_export(obj) -> bool:
-    if isinstance(obj, list):
-        return bool(obj) and all(_is_odysseus_export(x) for x in obj)
+def _is_export_dict(obj) -> bool:
     return isinstance(obj, dict) and isinstance(obj.get("messages"), list) and "exported" in obj
+
+
+def _is_odysseus_export(obj) -> bool:
+    """One export, or a flat list of exports (one level only, so depth cannot recurse)."""
+    if isinstance(obj, list):
+        return bool(obj) and all(_is_export_dict(x) for x in obj)
+    return _is_export_dict(obj)
 
 
 def _loads_document(text: str):
@@ -330,6 +340,8 @@ def detect_format(raw: bytes) -> Format:
             continue
         try:
             obj = json.loads(line)
+        except RecursionError:
+            return TEXT
         except ValueError:
             whole = _loads_document(text[1:] if text.startswith("\ufeff") else text)
             return ODYSSEUS if _is_odysseus_export(whole) else TEXT

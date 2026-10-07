@@ -199,3 +199,29 @@ def test_tab_indent_and_crlf_are_kept():
     assert all(not line.endswith(b"\r") and b"\n" not in line for line in lines)
     assert lines[1].startswith(b'\t"name"')
     assert json.loads(out)["model"] == "qwen3:8b"
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        "[\n" + "[" * 599 + json.dumps(GH) + "]" * 600 + "\n",
+        "[" * 600 + json.dumps(GH) + "]" * 600 + "\n",
+        "[" * 1200 + json.dumps(GH) + "]" * 1200 + "\n",
+    ],
+    ids=["list-600-deep", "line-600-deep", "line-1200-deep"],
+)
+def test_auto_mode_survives_deep_lists(raw, tmp_path):
+    out, report = redact_bytes(raw.encode())
+    assert GH not in out.decode()
+    assert report.secrets_found() == 1
+    src = tmp_path / "deep.json"
+    src.write_text(raw)
+    res = subprocess.run(
+        [sys.executable, "-m", "redact_transcripts", str(src)], capture_output=True, text=True
+    )
+    assert res.returncode == 0, res.stderr[-500:]
+    assert GH not in res.stdout and "[REDACTED:secret.github_token]" in res.stdout
+
+
+def test_list_of_exports_is_checked_one_level_only():
+    assert detect_format(json.dumps([[_export()]]).encode()).name == "jsonl"

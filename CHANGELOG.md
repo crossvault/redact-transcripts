@@ -12,15 +12,18 @@ All notable changes are listed here. The format follows
   is redacted like content, with no structural exemption; roles, part types, the model tag and
   the export time come out unchanged because no rule matches their normal values. A clean file
   comes out byte-identical; otherwise indentation (spaces or tabs), line endings and BOM are
-  kept. Input that nests too deeply to parse is redacted as plain text. Example:
-  `examples/odysseus-export.json`.
+  kept. Example: `examples/odysseus-export.json`.
 
 ### Changed
 - `--format auto` recognises an Odysseus export, including a pretty-printed one (which it used
   to treat as plain text). A JSON Lines file whose first line looks like an export (a `messages`
   list and an `exported` key) is now detected as `odysseus` instead of `jsonl`; its redaction is
-  the same unless you pass `--keep-key`. A multi-line input that is not JSON, or nests too deeply
-  to parse, is still detected as `text`.
+  the same. A multi-line input that is not JSON is still detected as `text`.
+
+### Fixed
+- Input nested too deeply to parse or walk (a `RecursionError`) no longer aborts the run, in any
+  JSON format and in `--format auto`: the whole input, or the one affected line, is redacted as
+  plain text instead.
 
 ## [0.2.0] - unreleased (date set at release)
 
