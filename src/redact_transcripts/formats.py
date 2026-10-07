@@ -133,7 +133,7 @@ class JsonlFormat(Format):
             counts: Dict[str, int] = {}
             try:
                 obj = json.loads(body)
-            except ValueError:
+            except (ValueError, RecursionError):  # not JSON, or nests too deeply to parse
                 report.non_json_lines += 1
                 block = [line]
                 while opens_private_key("\n".join(block)) and i < len(lines):

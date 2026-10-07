@@ -225,3 +225,18 @@ def test_auto_mode_survives_deep_lists(raw, tmp_path):
 
 def test_list_of_exports_is_checked_one_level_only():
     assert detect_format(json.dumps([[_export()]]).encode()).name == "jsonl"
+
+
+@pytest.mark.parametrize("fmt", ["jsonl", "claude-code", "auto"])
+def test_very_deep_second_line_is_redacted_as_text(fmt, tmp_path):
+    raw = '{"a": 1}\n' + "[" * 100_000 + json.dumps(GH) + "]" * 100_000 + "\n"
+    out, report = redact_bytes(raw.encode(), format=fmt)
+    assert GH not in out.decode()
+    assert report.secrets_found() == 1
+    src = tmp_path / "deep.jsonl"
+    src.write_text(raw)
+    res = subprocess.run(
+        [sys.executable, "-m", "redact_transcripts", "-f", fmt, str(src)], capture_output=True, text=True
+    )
+    assert res.returncode == 0, res.stderr[-500:]
+    assert GH not in res.stdout and "[REDACTED:secret.github_token]" in res.stdout
