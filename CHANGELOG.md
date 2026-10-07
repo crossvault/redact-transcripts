@@ -6,6 +6,17 @@ All notable changes are listed here. The format follows
 
 ## [Unreleased]
 
+### Added
+- `odysseus` format for Odysseus session exports (`{"name", "model", "exported", "messages"}`):
+  one JSON document (pretty-printed or compact), a list of them, or one per line. `role`, part
+  `type`, `model` and `exported` are kept when they have the expected shape; the session title
+  and all message content are redacted. The output keeps the input's layout, and a clean file
+  comes out byte-identical. Example: `examples/odysseus-export.json`.
+
+### Changed
+- `--format auto` recognises an Odysseus export, including a pretty-printed one (which it used
+  to treat as plain text). Detection for every other input is unchanged.
+
 ## [0.2.0] - unreleased (date set at release)
 
 ### Added
