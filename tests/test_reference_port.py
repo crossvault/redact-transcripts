@@ -9,7 +9,7 @@ import json
 
 import pytest
 
-from redact_transcripts import Config, Redactor, redact_bytes
+from redact_transcripts import Config, Redactor, StreamRedactor, redact_bytes
 
 R = Redactor(config=Config(ipv4_keep=frozenset(), email_keep_domains=()))
 M = "FAKEfake0123456789Zz" + "QqRr9876WwXx54Yy"  # 36 characters, mixed case and digits
@@ -394,3 +394,45 @@ def test_private_key_as_string_concatenation(form):
 def test_concatenated_strings_without_a_key_stay():
     text = 'msg = ("-----BEGIN NOTE-----\\n" "hello world\\n" "-----END NOTE-----")'
     assert red(text) == text
+
+
+# --- the tail of a key with no BEGIN (text mode too) ---------------------------------------------
+
+TAIL = "$ tail -n 3 key.txt\n" + "\n".join(KEY_LINES) + "\n-----END RSA PRIVATE KEY-----\ndone\n"
+
+
+def test_key_tail_without_begin_in_text_mode():
+    out, report = redact_bytes(TAIL.encode(), format="text")
+    assert b"FAKEEXAMPLE" not in out and b"NOTAREALKEY" not in out and out.endswith(b"done\n")
+    assert out.count(b"\n") == TAIL.count("\n") and report.rules.get("secret.private_key") == 1
+    assert out.decode() == red(TAIL)
+
+
+@pytest.mark.parametrize("size", [1, 3, 7, 40])
+def test_key_tail_streamed_in_chunks_equals_whole_text(size):
+    s = StreamRedactor(R)
+    out = "".join(s.feed(TAIL[i : i + size]) for i in range(0, len(TAIL), size)) + s.close()
+    assert out == R.redact_text(TAIL)
+
+
+def test_key_tail_in_jsonl():
+    out, _ = jsonl({"out": "\n".join(KEY_LINES) + "\n-----END PRIVATE KEY-----"})
+    assert "FAKEEXAMPLE" not in out and "NOTAREALKEY" not in out
+
+
+PUBLIC = {
+    "public-key": "-----BEGIN PUBLIC KEY-----\n" + "\n".join(KEY_LINES) + "\n-----END PUBLIC KEY-----\n",
+    "rsa-public-key": "-----BEGIN RSA PUBLIC KEY-----\n" + KEY_LINES[0] + "\n-----END RSA PUBLIC KEY-----\n",
+    "certificate-tail": "\n".join(KEY_LINES) + "\n-----END CERTIFICATE-----\n",
+    "csr-tail": "\n".join(KEY_LINES) + "\n-----END CERTIFICATE REQUEST-----\n",
+    "ssh-ed25519": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI" + "FAKEEXAMPLE" * 3 + " fake@example.com\n",
+    "marker-in-code": 'if line == "-----END PRIVATE KEY-----":\n    done = True\n',
+    "marker-constant": 'END = "-----END PRIVATE KEY-----"\nBEGIN_RE = r"^-----BEGIN"\n',
+}
+
+
+@pytest.mark.parametrize("name", list(PUBLIC))
+def test_public_material_and_marker_mentions_stay(name):
+    text = PUBLIC[name]
+    out, report = redact_bytes(text.encode(), format="text")
+    assert out.decode() == text and not report.rules

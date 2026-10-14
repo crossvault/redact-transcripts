@@ -8,9 +8,9 @@ decoded value by value) and ``cli`` (the reference client's pass over a raw JSON
 is synthetic (random or FAKE/EXAMPLE values, made-up names and paths); inputs and outputs are stored
 base64-encoded, so no file holds a token-shaped string.
 
-- ``redact``: the reference redacts something. Nothing it removed may survive here: every run of three
-  or more letters or digits it replaced must be gone from this package's output as well (the markers
-  differ, and this package may redact more).
+- ``redact``: the reference redacts something. Nothing it removed may survive here: no span it replaced
+  may survive whole (3+ letters or digits), and no run of 8 or more key characters (letters, digits,
+  ``+/=_-``) from such a span may survive either (the markers differ, and this package may redact more).
 - ``keep``: the reference leaves the input unchanged, and so does this package (its false-positive
   guards hold here too).
 
@@ -44,6 +44,7 @@ DATA = json.loads(gzip.decompress(FIXTURES.read_bytes()))
 R = Redactor(config=Config(email_keep_domains=(), ipv4_keep=frozenset()))
 CHUNK = 250
 _MARK = re.compile(r"\[REDACTED:[a-z0-9_.]+\]")
+_KEY_RUN = re.compile(r"[A-Za-z0-9+/=_-]{8,}")
 _NOT_CONTENT = re.compile(r"\\[nrtbf\"\\/]|\\u[0-9A-Fa-f]{4}|[^A-Za-z0-9]")
 
 
@@ -59,7 +60,9 @@ def run(text, kind):
 
 
 def kept_by_us(src, ref, ours):
-    """The runs the reference replaced that survive in ``ours`` (more often than in ``ref``)."""
+    """What the reference replaced and ``ours`` keeps (more often than ``ref`` does): a replaced span kept
+    whole (3+ letters or digits), or any run of 8+ key characters inside one, so a span this package
+    redacts only in part (its BEGIN marker, but not the key lines after it) still counts."""
     ours = _MARK.sub("[R]", ours)
     left = []
     for op, i1, i2, _j1, _j2 in difflib.SequenceMatcher(None, src, ref, autojunk=False).get_opcodes():
@@ -67,6 +70,10 @@ def kept_by_us(src, ref, ours):
             core = src[i1:i2].strip("\\\"' ")
             if len(_NOT_CONTENT.sub("", core)) >= 3 and ours.count(core) > ref.count(core):
                 left.append(core)
+                continue
+            for run in _KEY_RUN.findall(src, i1, i2):
+                if ours.count(run) > ref.count(run):
+                    left.append(run)
     return left
 
 
@@ -94,6 +101,15 @@ def test_everything_the_reference_redacts_is_redacted(start):
         if left:
             bad.append(f"{src!r}: kept {left[:3]!r}")
     assert not bad, f"{len(bad)} case(s); first: " + "\n".join(bad[:5])
+
+
+def test_the_check_catches_a_partly_redacted_key(monkeypatch):
+    """Mutation guard: without the client's private-key pass the decoded-text rules take only the BEGIN
+    marker of a key written as string concatenation; the run-level check must see the key lines left."""
+    monkeypatch.setattr(Redactor, "_cli_private_keys", lambda self, text, counts: text)
+    cases = [c for c in DATA["redact"] if "PRIVATE KEY" in _d(c["in"])]
+    assert cases
+    assert any(kept_by_us(_d(c["in"]), _d(c["ref"]), run(_d(c["in"]), c["kind"])) for c in cases)
 
 
 @pytest.mark.parametrize("start", _chunks(DATA["keep"]))

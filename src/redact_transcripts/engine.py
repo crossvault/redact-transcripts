@@ -288,8 +288,9 @@ class Redactor:
                 parts += [out[pos:s], mark, "".join(c for c in out[s:e] if c in "\r\n")]
                 pos = e
             out = "".join(parts) + out[pos:]
-        if len(spans) + n0:
-            counts[_PRIVATE_KEY] = counts.get(_PRIVATE_KEY, 0) + len(spans) + n0
+        out, n1 = _orphan_ends(out, mark)
+        if len(spans) + n0 + n1:
+            counts[_PRIVATE_KEY] = counts.get(_PRIVATE_KEY, 0) + len(spans) + n0 + n1
         return out
 
     def _escaped_spans(self, bound: Sequence[_Bound], view: str) -> List[Tuple[int, int]]:
@@ -633,12 +634,47 @@ def opens_private_key(text: str) -> bool:
         pos = e.end()
 
 
+def _orphan_ends(text: str, mark: str) -> Tuple[str, int]:
+    """The tail of a key whose BEGIN is not in ``text`` (``tail id_rsa``, a file read from an offset, the
+    second half of a key split over two strings): the run of key lines right before an END marker at the
+    start of its line, with the marker (:func:`_scrub_rules.sr_pem_orphan_end`, at least one full key
+    line). Every END is checked; whole blocks are already replaced. Returns (text, tails found)."""
+    if "-----" not in text:
+        return text, 0
+    parts: List[str] = []
+    prev = n = 0
+    for m in _sr._SR_PEMC_END.finditer(text):
+        seg = text[prev : m.end()]
+        new = _sr.sr_pem_orphan_end(seg)
+        if new != seg:
+            n += 1
+            new = new.replace(_sr.SR_PEMC_MARK, mark)
+        parts.append(new)
+        prev = m.end()
+    if not n:
+        return text, 0
+    return "".join(parts) + text[prev:], n
+
+
+def _key_line(line: str) -> bool:
+    """A line that may be part of a key body (base64, a PEM header or a blank line): the lines a key tail
+    before an END marker is made of (_scrub_rules._sr_pemc_line)."""
+    return _sr._sr_pemc_line(line.rstrip("\r\n").strip(" \t"), True)
+
+
+def _starts_with_end(line: str) -> bool:
+    m = _sr._SR_PEMC_END.search(line)
+    return m is not None and not line[: m.start()].strip(" \t")
+
+
 class StreamRedactor:
     """Redact text that arrives in chunks (a log tail, a streamed model response, a pipe).
 
     Output is released line by line. A secret split across chunks is therefore still caught,
     as long as it does not span a newline. The one multi-line shape, a PEM private-key block,
-    is held back until its END line arrives. For any chunking, the concatenated output equals
+    is held back until its END line arrives, and so is a run of key-shaped lines (base64, headers,
+    blank lines; at most 200) until a line shows whether an END marker ends it (the tail of a key
+    whose BEGIN never came, e.g. ``tail id_rsa``). For any chunking, the concatenated output equals
     ``redactor.redact_text(whole_input)``, with one exception: a line longer than
     ``max_buffer`` characters, or a key block longer than that, is flushed early; a
     still-unterminated key block is then redacted to its end and the following lines are
@@ -659,6 +695,8 @@ class StreamRedactor:
         self._buf = ""
         self._held = ""
         self._held_start = 0
+        self._pending: List[Tuple[str, int]] = []  # key-shaped lines that an END line may still claim
+        self._pending_size = 0
         self._swallow = False
         self._closed = False
         self._in_hash = hashlib.sha256()
@@ -695,10 +733,33 @@ class StreamRedactor:
                 self._swallow = True
                 return self._emit(seg, self._held_start)
             return ""
+        if self._pending and _starts_with_end(line):
+            first = self._pending[0][1]
+            seg = "".join(ln for ln, _no in self._pending) + line
+            self._pending, self._pending_size = [], 0
+            return self._emit(seg, first)
+        if _key_line(line) and not opens_private_key(line):
+            self._pending.append((line, line_no))
+            self._pending_size += len(line)
+            out = ""
+            while self._pending and (
+                len(self._pending) >= _sr.SR_PEMC_MAX_LINES or self._pending_size > self.max_buffer
+            ):
+                old, no = self._pending.pop(0)
+                self._pending_size -= len(old)
+                out += self._emit(old, no)
+            return out
+        out = self._release()
         if opens_private_key(line):
             self._held, self._held_start = line, line_no
-            return ""
-        return self._emit(line, line_no)
+            return out
+        return out + self._emit(line, line_no)
+
+    def _release(self) -> str:
+        """Emit the key-shaped lines held back, one by one (no END marker claimed them)."""
+        out = "".join(self._emit(ln, no) for ln, no in self._pending)
+        self._pending, self._pending_size = [], 0
+        return out
 
     def feed(self, chunk: str) -> str:
         """Add a chunk; return the redacted text that is safe to release now."""
@@ -729,6 +790,7 @@ class StreamRedactor:
         if self._buf:
             seg, self._buf = self._buf, ""
             out += self._line(seg)
+        out += self._release()
         if self._held:
             seg, self._held = self._held, ""
             out += self._emit(seg, self._held_start)

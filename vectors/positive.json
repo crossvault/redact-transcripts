@@ -885,6 +885,21 @@
       "absent": [
         "ghp_FAKEEXAMPLE"
       ]
+    },
+    {
+      "id": "private-key-tail-no-begin",
+      "description": "the tail of a private key before its END line, with no BEGIN (tail of a key file); the line breaks are kept",
+      "mode": "text",
+      "input": "$ tail -n 2 key.txt\nFAKEEXAMPLEFAKEEXAMPLEFAKEEXAMPLEFAKEEXAMPLE00\nNOTAREALKEYNOTAREALKEYNOTAREALKEYNOTAREALKEY00\n-----END PRIVATE KEY-----\nok\n",
+      "expect": "redacted",
+      "rules": [
+        "secret.private_key"
+      ],
+      "absent": [
+        "FAKEEXAMPLEFAKEEXAMPLE",
+        "NOTAREALKEYNOTAREALKEY"
+      ],
+      "output": "$ tail -n 2 key.txt\n[REDACTED:secret.private_key]\n\n\nok\n"
     }
   ]
 }

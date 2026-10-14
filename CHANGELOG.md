@@ -6,6 +6,15 @@ All notable changes are listed here. The format follows
 
 ## [Unreleased]
 
+### Fixed (follow-up to the reference port)
+- Text mode: the tail of a private key before its END line, with no BEGIN (`tail id_rsa`, a file read
+  from an offset), is redacted, as in the JSONL formats. The stream holds a run of key-shaped lines (at
+  most 200) until it sees whether an END line ends it. Public keys, certificates, CSRs, `ssh-ed25519`
+  lines and code that only mentions the markers are unchanged.
+- The parity check also catches a reference-redacted span this package redacts only in part: no run of
+  8 or more key characters from it may survive.
+- README: the private-key forms the reference does not cover either.
+
 ### Added
 - Vendor token shapes: `secret.openrouter_key`, `secret.google_oauth_token` (access and refresh
   tokens), `secret.google_oauth_client_secret`, `secret.groq_key`, `secret.xai_key`,
