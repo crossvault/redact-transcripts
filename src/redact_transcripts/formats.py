@@ -23,7 +23,19 @@ import json
 import re
 from typing import Dict, FrozenSet, Iterable, List, Mapping, Optional, Tuple
 
-from .engine import Config, Redactor, Report, StreamRedactor, opens_private_key
+from . import _scrub_rules as _sr
+from .engine import (
+    DEEP_NESTING,
+    Config,
+    DuplicateKeyObject,
+    Redactor,
+    Report,
+    StreamRedactor,
+    json_dumps,
+    json_object_pairs,
+    json_parse_float,
+    opens_private_key,
+)
 
 #: Default shape for a structural value: a short identifier without spaces, ``=`` or ``:``.
 IDENTIFIER_SHAPE = r"[A-Za-z0-9_.\-]{1,128}"
@@ -119,6 +131,9 @@ class JsonlFormat(Format):
         trailing_newline = text.endswith("\n")
         if trailing_newline:
             lines.pop()
+        # A private key whose lines sit in separate strings (an array of lines, or BEGIN in one record
+        # and the rest in the next): the carry follows it from string to string and record to record.
+        pem = _sr.SrPemCarry() if redactor.private_key_enabled else None
         out: List[str] = []
         i = 0
         while i < len(lines):
@@ -132,7 +147,11 @@ class JsonlFormat(Format):
             body, cr = (line[:-1], "\r") if line.endswith("\r") else (line, "")
             counts: Dict[str, int] = {}
             try:
-                obj = json.loads(body)
+                if too_deep(body):
+                    raise RecursionError("nesting over MAX_JSON_DEPTH")  # never decoded
+                obj = json.loads(body, object_pairs_hook=json_object_pairs, parse_float=json_parse_float)
+            except RecursionError:
+                new = redact_deep(body, redactor, counts, pem) + cr
             except ValueError:
                 report.non_json_lines += 1
                 block = [line]
@@ -141,18 +160,120 @@ class JsonlFormat(Format):
                     i += 1
                     report.lines_total += 1
                 new = redactor.redact_text("\n".join(block), counts)
+                if pem is not None:
+                    pem.close()
             else:
-                redacted = redactor.redact_value(obj, counts, self.keeps)
-                new = (
-                    line
-                    if not counts
-                    else (json.dumps(redacted, ensure_ascii=False, separators=(",", ":")) + cr)
-                )
+                try:
+                    if pem is not None and (pem.open or "-----" in line):
+                        pem.hits = 0
+                        obj = _pem_walk(obj, pem, redactor.marker(_PRIVATE_KEY))
+                        if pem.hits:
+                            counts[_PRIVATE_KEY] = counts.get(_PRIVATE_KEY, 0) + pem.hits
+                    if pem is not None:
+                        pem.end_record()
+                    redacted = redactor.redact_value(obj, counts, self.keeps)
+                    new = line if not counts else json_dumps(redacted) + cr
+                except RecursionError:  # a walk ran out of stack below the depth cap: fail closed
+                    counts = {}
+                    new = redact_deep(body, redactor, counts, pem) + cr
             report.add(line_no, counts)
             out.append(new)
         result = ("\n".join(out) + ("\n" if trailing_newline else "")).encode(_ENC, _ERRORS)
         report.output_sha256 = hashlib.sha256(result).hexdigest()
         return result, report
+
+
+_PRIVATE_KEY = "secret.private_key"
+
+
+def _pem_walk(node, carry: "_sr.SrPemCarry", mark: str):
+    """:func:`_scrub_rules.sr_pem_walk` that keeps every member of a :class:`DuplicateKeyObject` and
+    writes this package's marker."""
+    if isinstance(node, DuplicateKeyObject):
+        return DuplicateKeyObject([(k, _pem_walk(v, carry, mark)) for k, v in node.pairs])
+    if isinstance(node, dict):
+        return {k: _pem_walk(v, carry, mark) for k, v in node.items()}
+    if isinstance(node, list):
+        out = []
+        for i, v in enumerate(node):
+            if carry.open and carry.empty and isinstance(v, str):
+                ok = _sr._sr_pemc_completes((node[j] for j in range(i, len(node))), carry)
+                if ok:
+                    carry.empty = False
+                elif ok is False:
+                    carry.close()
+            out.append(_pem_walk(v, carry, mark))
+        return out
+    out = _sr.sr_pem_walk(node, carry)
+    return out.replace(_sr.SR_PEMC_MARK, mark) if out != node else out
+
+
+#: The deepest bracket nesting a JSONL line may have to be decoded. A deeper line is not decoded (the
+#: decoder and the walk would run out of stack); it is redacted fail-closed by :func:`redact_deep`.
+MAX_JSON_DEPTH = 600
+_JSON_STRING = re.compile(r'"[^"\\]*(?:\\.[^"\\]*)*"?', re.S)
+_JSON_BRACKET = re.compile(r"[\[\]{}]")
+# A string literal (+ a following `:` when it is a key), or any bare run outside strings.
+_JSON_SCALAR = re.compile(r'("[^"\\]*(?:\\.[^"\\]*)*"?)(\s*:)?|[^\s\[\]{}:,"]+', re.S)
+_JSON_LITERALS = frozenset(("true", "false", "null"))
+_PLAIN_KEY = re.compile(r'"[A-Za-z0-9_.\- ]{1,64}"')
+
+
+def too_deep(line: str, limit: int = MAX_JSON_DEPTH) -> bool:
+    """Linear pre-parse check: the bracket nesting outside string literals exceeds ``limit``."""
+    if line.count("[") + line.count("{") <= limit:
+        return False
+    stripped = _JSON_STRING.sub("", line)
+    if stripped.count("[") + stripped.count("{") <= limit:
+        return False
+    depth = 0
+    for m in _JSON_BRACKET.finditer(stripped):
+        if m.group() in "[{":
+            depth += 1
+            if depth > limit:
+                return True
+        else:
+            depth -= 1
+    return False
+
+
+def redact_deep(line: str, redactor: Redactor, counts: Dict[str, int], pem=None) -> str:
+    """Fail-closed redaction of a line too deep to decode: every string value becomes the
+    ``secret.deep_nesting`` marker and every other bare run ``0`` (numbers; raw text when the line is
+    not JSON); only ``true``/``false``/``null`` and plain, clean keys stay. Valid JSON in, valid JSON
+    out, at full depth. The text rules still run once over the line, for the report."""
+    redactor.redact_text(line, counts)
+    if not redactor.deep_nesting_enabled:
+        return redactor.redact_text(line, {})
+    counts[DEEP_NESTING] = counts.get(DEEP_NESTING, 0) + 1
+    mark = json.dumps(redactor.marker(DEEP_NESTING))
+    clean: Dict[str, bool] = {}
+
+    def sub(m: "re.Match[str]") -> str:
+        s, colon = m.group(1), m.group(2)
+        if s is None:
+            return m.group(0) if m.group(0) in _JSON_LITERALS else "0"
+        if colon is None:
+            return mark
+        ok = clean.get(s)
+        if ok is None:
+            ok = clean[s] = bool(_PLAIN_KEY.fullmatch(s)) and redactor.redact_text(s, {}) == s
+        return (s if ok else mark) + colon
+
+    out = _JSON_SCALAR.sub(sub, line)
+    if pem is not None:
+        # The record's strings are all gone: a key the record before opened took its part here; one this
+        # record opens (a private BEGIN with no END after it) carries into the next.
+        begins = list(_sr._SR_PEMC_BEGIN.finditer(line))
+        last = begins[-1] if begins else None
+        if last is not None and not _sr._SR_PEMC_END.search(line, last.end()):
+            pem.begin(kind=last.group(0)[11:-5].upper())
+        elif _sr._SR_PEMC_END.search(line):
+            pem.close()
+        elif pem.open:
+            pem.seen = True
+        pem.end_record()
+    return out
 
 
 _UUID = r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
@@ -227,6 +348,8 @@ def detect_format(raw: bytes) -> Format:
             continue
         try:
             obj = json.loads(line)
+        except RecursionError:
+            return JSONL
         except ValueError:
             return TEXT
         if isinstance(obj, dict) and any(k in obj for k in _CLAUDE_CODE_HINTS):

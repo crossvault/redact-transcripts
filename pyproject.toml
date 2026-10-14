@@ -55,6 +55,8 @@ addopts = "-q --doctest-modules --import-mode=importlib"
 line-length = 110
 target-version = "py39"
 src = ["src", "tests"]
+# The reference rule set, kept as close to its source as possible so a later sync is a plain diff.
+extend-exclude = ["src/redact_transcripts/_scrub_rules.py"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP", "RUF"]

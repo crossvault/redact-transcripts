@@ -9,7 +9,7 @@ SPDX-License-Identifier = "CC0-1.0"
 [[annotations]]
 path = [
   "README.md", "CHANGELOG.md", "CONTRIBUTING.md", "SECURITY.md", "NOTICE", ".gitignore",
-  ".gitleaks.toml", "examples/**", ".github/**", "LICENSE",
+  ".gitleaks.toml", "examples/**", ".github/**", "LICENSE", "tests/data/**",
 ]
 precedence = "aggregate"
 SPDX-FileCopyrightText = "2026 crossVault GmbH"

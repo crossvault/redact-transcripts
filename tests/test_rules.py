@@ -35,18 +35,34 @@ def test_keep_lists_are_configurable():
     assert r.redact_text("c@example.com") == "[REDACTED:pii.email]"
 
 
-def test_rules_never_span_lines_except_private_key():
-    for rule in default_rules():
-        if rule.name == "secret.private_key":
-            continue
-        assert r"\s*[:=]" not in rule.pattern.pattern, rule.name
-    assert redact_text("password:\n  user: x") == "password:\n  user: x"
+def test_text_is_redacted_line_by_line():
+    # The text format streams line by line, so a key with no value on its own line keeps the next line.
+    # One string (a JSON value, redact_text) is redacted whole, as the reference rules do: there the
+    # value may sit on the next line.
+    from redact_transcripts import redact_bytes
+
+    out, _ = redact_bytes(b"password:\n  user: x\n", format="text")
+    assert out == b"password:\n  user: x\n"
+    assert redact_text("Authorization:\n  Bearer FAKE-EXAMPLE-0000-token") == (
+        "Authorization:\n  Bearer [REDACTED:secret.auth_header]"
+    )
 
 
 def test_rule_names_are_unique_and_dotted():
     names = [r.name for r in default_rules()]
     assert len(names) == len(set(names))
-    assert all(re.match(r"^(secret|pii|infra)\.[a-z0-9_]+$", n) for n in names)
+    reported = [n for r in default_rules() for n in r.names]
+    assert all(re.match(r"^(secret|pii|infra)\.[a-z0-9_]+$", n) for n in names + reported)
+
+
+def test_vendor_tokens_are_reported_and_disabled_per_vendor():
+    text = "a ghp_FAKEEXAMPLE000000000000000000000000 b AKIAFAKEEXAMPLE00000"
+    counts = {}
+    out = Redactor().redact_text(text, counts)
+    assert counts == {"secret.github_token": 1, "secret.aws_key_id": 1}, out
+    kept = Redactor(disable=["secret.github_token"]).redact_text(text)
+    assert "ghp_FAKEEXAMPLE" in kept and "AKIAFAKE" not in kept
+    assert "secret.github_token" not in Redactor(disable=["secret.github_token"]).rule_names
 
 
 @pytest.mark.parametrize("text", ["", "plain", "a\nb\n", "[REDACTED:secret.jwt]"])
@@ -62,8 +78,6 @@ def test_trivial_inputs(text):
         "secretCount: 4096",
         "password_length: 16",
         "passwordAttempts: 1000",
-        "token: 12345678",
-        "api_key=12345678",
         "mapping: 1234",
         "spinner=5000",
     ],
@@ -87,6 +101,12 @@ def test_numeric_passwords_and_pins_are_redacted(text, rule):
     counts = {}
     out = Redactor().redact_text(text, counts)
     assert not any(ch.isdigit() for ch in out.split(":", 1)[-1].split("=", 1)[-1]) and rule in counts
+
+
+@pytest.mark.parametrize("text", ["token: 12345678", "api_key=12345678"])
+def test_eight_digit_values_under_a_secret_key_are_redacted(text):
+    # in step with the reference rules: 8+ characters under a token or API-key name are a value
+    assert "12345678" not in redact_text(text)
 
 
 def test_numeric_json_values_by_key():

@@ -94,13 +94,6 @@
       "expect": "unchanged"
     },
     {
-      "id": "octet-over-255",
-      "description": "dotted quad with an octet over 255",
-      "mode": "text",
-      "input": "value 999.10.10.10\n",
-      "expect": "unchanged"
-    },
-    {
       "id": "example-email",
       "description": "documentation e-mail domain",
       "mode": "text",
@@ -360,13 +353,6 @@
       "expect": "unchanged"
     },
     {
-      "id": "counter-token-numeric",
-      "description": "digits under a token key are not a token",
-      "mode": "text",
-      "input": "token: 12345678\n",
-      "expect": "unchanged"
-    },
-    {
       "id": "pin-substring-mapping",
       "description": "pin as a substring of another word",
       "mode": "text",
@@ -385,6 +371,27 @@
       "description": "numeric counters and metrics in JSON",
       "mode": "jsonl",
       "input": "{\"tokensUsed\": 12345, \"inputTokens\": 4096, \"secretCount\": 1200, \"passwordAttempts\": 1000, \"token_count\": 2048, \"cacheReadTokens\": 99999}\n",
+      "expect": "unchanged"
+    },
+    {
+      "id": "snake-case-name-after-underscore-prefix",
+      "description": "snake case name after underscore prefix",
+      "mode": "text",
+      "input": "the_sk_live_mode_flag and storage_read_bytes\n",
+      "expect": "unchanged"
+    },
+    {
+      "id": "slack-doc-path-word",
+      "description": "slack doc path word",
+      "mode": "text",
+      "input": "see slack_xoxb-tokens-and-scopes-guide\n",
+      "expect": "unchanged"
+    },
+    {
+      "id": "xai-doc-url",
+      "description": "xai doc url",
+      "mode": "text",
+      "input": "https://docs.x.ai/xai-api-reference-v2-2024-guide\n",
       "expect": "unchanged"
     }
   ]

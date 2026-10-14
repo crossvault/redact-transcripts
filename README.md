@@ -59,7 +59,7 @@ Use it in a pipe (`-` reads stdin):
 <!-- readme-test -->
 ```console
 $ echo 'curl -H "Authorization: Bearer FAKE-EXAMPLE-0000-token" https://api.example.com' | redact-transcripts -
-curl -H "Authorization: Bearer [REDACTED:secret.bearer]" https://api.example.com
+curl -H "Authorization: Bearer [REDACTED:secret.auth_header]" https://api.example.com
 ```
 
 Gate a commit or a CI job on it. `--check` writes nothing and exits 1 if a `secret.*` rule
@@ -133,63 +133,51 @@ thanks @[PERSON-2], cc @my-own-handle
 It works by **context, not by name recognition**: a word is treated as a person only where the text
 itself says so.
 
-| Rule | Catches |
-|---|---|
-| `person.handle` | `@mentions` (not decorators, annotations, npm scopes, CSS at-rules, JSDoc tags, SQL parameters, Makefile `@echo` …), Discord `<@id>` mentions, `"login"`/`"username"`/`"author_name"` … fields in JSON text, `assignees:`-style login lists |
-| `person.name` | `Co-authored-by:`, `Signed-off-by:`, `Reviewed-by:` and other trailers, `Author:`/`Committer:` lines, "X commented on Oct 3", "X approved these changes", "On …, X wrote:", "X (Real Name) wrote:", "Am … schrieb X:", a `"name"` field next to a login or e-mail field |
-| `person.email_local` | the local part of an e-mail address that `pii.email` kept (an address at a kept domain, or all addresses when `pii.email` is disabled): `[PERSON-1]@example.com` |
-| `person.profile_url` | the handle in `github.com/<login>`, `gitlab.com/<login>`, `x.com/<user>` (also `/status/<id>`), `<host>/@<user>`, `bsky.app/profile/<handle>`, `discord.com/users/<id>` |
-| `person.keyed_value` | JSON formats: a string under a person key (`login`, `username`, `author`, `committer`, `display_name` …), or under `name` when the same object has a `login`, `email` or `avatar_url` key |
-
-The same identity gets the same number wherever it appears: `@fake-mira` and
-`fake-mira@example.org` both become `[PERSON-n]`. Numbering starts again for each file (or each
-`StreamRedactor`); a `Redactor` you call directly keeps numbering until `reset()`.
-
-**Allow-lists.** `--keep-person NAME` (repeatable; Python: `Config(keep_people=(...))`) keeps a
-handle, a name or a full e-mail address, typically your own identities. Matching is exact and
-case-insensitive, and a leading `@` is ignored. An e-mail address keeps only that exact address,
-never its local part as a handle: anyone can register `someone@their-domain.example`. Bots, CI
-services, AI assistants and group mentions (`*[bot]`, `*-bot`, `dependabot`, `renovate`,
-`github-actions`, `claude`, `copilot`, `cursor`, `devin`, `openhands`, `@here`, `@everyone` …)
-are always kept; add any other bot with `--keep-person`. `--keep-person`
-affects only the `person.*` rules; use `Config(email_keep_domains=...)` to keep addresses from
-`pii.email`.
-
-```python
-from redact_transcripts import Config, Redactor, redact_bytes
-
-out, report = redact_bytes(raw, format="claude-code", third_parties=True, keep_people=["my-login", "My Name"])
-
-redactor = Redactor(
-    config=Config(keep_people=("my-login",), person_template="<person {n}>"), third_parties=True
-)
-```
-
-The placeholder template must contain `{n}`, must not contain `@`, and must start with a
-punctuation character, so a placeholder can never be matched again: redacting twice gives the
-same result as redacting once.
-
-## Rules
-
-`redact-transcripts --list-rules` prints them (add `--third-parties` to include `person.*`). Each match is replaced by `[REDACTED:<rule>]`.
+The rules are the a4sx transcript scrubber's, in its order and with its false-positive guards
+(`tests/test_parity.py` pins that), plus a few of this package's own (marked *own*). Each string runs
+through them twice, as the reference does on its two paths: once as decoded text, and once as it is
+written inside a JSONL line ("CLI mode": the reference client's raw-JSONL rules and its own key rules, where
+a JSON escape such as a literal `\n` before `--password X` is a boundary). Everything either pass finds is
+redacted; `--disable cli_mode` turns the second pass off. A scheduled CI job
+(`.github/workflows/reference-drift.yml`, weekly and before every release) checks the parity fixtures
+against the published reference client and fails when the reference has changed.
 
 | Rule | Catches |
 |---|---|
-| `secret.private_key` | PEM `-----BEGIN … PRIVATE KEY-----` blocks (multi-line) |
-| `secret.anthropic_key`, `secret.openai_key`, `secret.github_token`, `secret.gitlab_token`, `secret.slack_token`, `secret.aws_key_id`, `secret.google_api_key`, `secret.stripe_key`, `secret.jwt` | vendor token shapes |
-| `secret.base64_encoded` | a base64 blob whose decoded text contains one of the secrets above (one level) |
-| `secret.bearer`, `secret.basic_auth` | `Bearer …` / `Basic …` credentials (the scheme is kept) |
-| `secret.auth_header` | `Authorization: token …` and other schemes (`digest`, `apikey`, `key`, `sso-key` …) |
-| `secret.url_credentials` | `scheme://user:password@host` |
-| `secret.url_token` | `scheme://<token>@host`: a 16+ character token as the whole userinfo (git remotes) |
-| `secret.cli_flag` | `--password X`, `--token=X`, `--api-key X` … |
+| `secret.private_key` | PEM `-----BEGIN … PRIVATE KEY-----` blocks (any label, PGP too; the block's line breaks are kept): a plain block, one behind line prefixes (`cat -n`, the Read tool's `1→`, `> `, `# `, `│ `), a key in one string with escaped `\n`, a key written as quoted string concatenation (Python `"…\n" "…\n"`, JS and Go `"…\n" +`, one line or many), a key printed as a quoted list of its lines, and in the JSONL formats a key split over several strings or records; a lone BEGIN marker is redacted too. Not: a key in a template literal or heredoc whose lines carry other characters |
+| `secret.anthropic_key`, `secret.openrouter_key`, `secret.openai_key`, `secret.github_token`, `secret.slack_token`, `secret.aws_key_id`, `secret.google_api_key`, `secret.google_oauth_token`, `secret.google_oauth_client_secret`, `secret.groq_key`, `secret.xai_key`, `secret.stripe_key`, `secret.stripe_webhook_secret`, `secret.zai_key` | vendor token shapes, also right after `_`, `-`, `/`, a URL escape (`%20`) or a literal `\n`, glued onto text (exact shape), written back to back, and followed by `_<word>`, `-x`, a path or `+`/`=`; an identifier-shaped run (`slack_xoxb-tokens-and-scopes-guide`, `id-xai-GrokModelConfigLoader`) is kept, and nothing inside base64 or a `data:` URI is rewritten |
+| `secret.token_tail` | the rest of a key glued onto a key that was just redacted (`<key><key>`) |
+| `secret.prefixed_api_token`, `secret.a4sx_session` | a4sx platform tokens: bare-prefix API tokens (`tok_…`, `pol_…`, `pt_…`, `emit_…`, also glued to an upper-case name, `FOO_tok_…`), `ge_tok_…`/`ge_emit_…`-style tokens, and `ge_sess_…` session tokens |
+| `secret.gitlab_token` (*own*) | `glpat-…` |
+| `secret.jwt` | a bare JWT (or 5-part JWE) whose header decodes to a JOSE header naming `alg`; runs last |
+| `secret.auth_header` | `Authorization:` / `Proxy-Authorization:` with any scheme (`Bearer`, `Basic`, `token`, `Digest` …) or none, the value also on the next line |
+| `secret.bearer`, `secret.basic_auth` (*own*) | a bare `Bearer …` / `Basic …` credential (the scheme is kept) |
+| `secret.url_credentials`, `secret.url_token` (*own*) | `scheme://user:password@host`, and `scheme://<token>@host` (a 16+ character token as the whole userinfo, git remotes) |
+| `secret.digest` | HTTP Digest `response=` and `cnonce=` |
+| `secret.aws_signature` | AWS SigV4 `Signature=` / `X-Amz-Signature=` (presigned URLs), SigV2 `Signature=`, `X-Amz-Security-Token=` |
+| `secret.quoted_assignment` | a quoted value under a secret-named key that holds spaces, quotes or line breaks, or is triple-quoted (`password = "two word phrase"`) |
+| `secret.json_assignment` | JSON or a Python dict inside text: `{"api_key": "…"}`, `'password': '…'`, `{\"pin\": 4821}` |
+| `secret.nested_assignment` | a secret-named key whose value sits in escaped quotes at any depth (`PASSWORD = \"…\"`, `{\\\"token\\\": \\\"…\\\"}`) |
+| `secret.assignment` | `password=…`, `api_key: …`, `export X_TOKEN=…`, `SECRET_KEY=…` (a glued prefix such as `MY_` stays) |
+| `secret.weakpass` | a short or special-character password (`password=123qwe@`) |
 | `secret.user_percent_pass` | `-U user%password` (smbclient style) |
-| `secret.assignment` | `password=…`, `api_key: "…"` (the whole quoted value, spaces included), `export X_TOKEN=…`, one level of backslash-escaped JSON |
-| `secret.keyed_value` | JSON formats: a string, or the items of a list stored under a secret-named key (`{"GITHUB_TOKEN": "…"}`); a number of 4+ digits only under a password, secret or PIN key |
-| `secret.pin` | `pin: 4711`, `userPin=4321`, `passcode: 887766` (whole key words, so `mapping: 1234` is kept) |
-| `pii.email` | e-mail addresses (except `example.com/.org/.net`, plus `anthropic.com` in the `claude-code` format so `Co-Authored-By` trailers survive; configurable) |
-| `pii.home_dir` | the user name in `/home/<user>`, `/Users/<user>`, `C:\Users\<user>` → `[USER]` |
+| `secret.cli_flag` | `--password X`, `--db-password=X`, `--pass X`, `--pwd X` (not `--password flag`, `$VAR`, a path) |
+| `secret.cli_token_flag` (*own*) | `--token X`, `--api-key=X`, `--secret X` |
+| `secret.cmd_userpass` | `curl -u user:password`, `--user user:password` (a numeric `uid:gid` and `docker run -u node:node` are kept) |
+| `secret.pass_assignment` | `db_pass=…`, `DB_PASS=…`, `pwd=…` (not `pwd=/home/x`, a working directory) |
+| `secret.mysql_password` | `mysql -u root -pPASSWORD`, `mysqldump -p'…'`, `mariadb -p…` |
+| `secret.pin` (*own*) | `pin: 4711`, `userPin=4321`, `passcode: 887766` (whole key words, so `mapping: 1234` is kept) |
+| `secret.base64_encoded` (*own*) | a base64 blob whose decoded text contains one of the secrets above (one level) |
+| `secret.gsheet` | Google Sheet / Doc ids (`spreadsheets/d/<id>`, `sheet_id: <id>`) |
+| `secret.escaped` | any of the secrets above spelled with JSON escapes inside a string that is itself JSON (`\u0067hp_…`, `1\/\/…`), up to 5 levels deep |
+| `secret.keyed_value` | JSON formats: every value under a key that names a secret (`{"GITHUB_TOKEN": "…"}`, `{"credentials": {"v": "…"}}`, `{"token": ["…"]}`); a number only under a password, secret or PIN key; env-var names and placeholders are kept |
+| `secret.deep_nesting` | JSONL formats: a line nested more than 600 deep is not decoded; every string in it is replaced |
+| `infra.mac` | MAC addresses |
+| `infra.ipv6` | IPv6 addresses (not `file.py:26:`-style colon runs) |
 | `infra.ipv4` | IPv4 addresses (except loopback/any; configurable) |
+| `infra.keyfile` | private-key and credential file names (`id_rsa`, `deploy.pem`, `my-service-account.json`) |
+| `pii.email` | e-mail addresses (except `example.com/.org/.net`, plus `anthropic.com` in the `claude-code` format so `Co-Authored-By` trailers survive; configurable) |
+| `pii.home_dir` | the user name in a home path → `[USER]`: `/home/<user>`, `/Users/<user>`, `C:\Users\<user>` (any case, either separator), `/mnt/c/Users/<user>` (WSL), `/c/Users/<user>` (Git Bash), `\\wsl$\Ubuntu\home\<user>`, URL-encoded (`%2Fhome%2F<user>`), in `file://` and `vscode-remote://` URIs, and in Claude Code project-folder names (`~/.claude/projects/-home-<user>-proj`) |
 
 Values that are clearly not secrets are left alone: `${VAR}` and `$VAR` references, `<placeholder>`,
 `****`, `true/false/null`, numbers except under a password, secret or PIN key, counters and metrics (`tokensUsed: 12345`, `secretCount`, `password_attempts`), and metadata keys such as `max_tokens`, `tokenizer` or
@@ -245,19 +233,25 @@ For a non-JSON format, subclass `Format` and implement `redact_bytes(raw, redact
 
 Known gaps, each pinned by a vector in [`vectors/known_misses.json`](vectors/known_misses.json):
 
-- a secret **split across two records or two lines** (each half is too short to recognise);
+- a token **split across two records or two lines** (each half is too short to recognise); a
+  private key split over several JSON strings or records *is* caught;
 - secrets in **prose** ("the password is hunter2"), and anything whose sensitivity is about meaning:
   names, customer data, confidential code;
 - **hostnames**, internal URLs and project names (there is no rule for them; add `--rule`s);
-- encodings other than one level of base64: hex, double base64, URL-encoding, zero-width characters;
-- base64 variants: the URL-safe alphabet, MIME line-wrapped base64;
-- more than one level of escaping (`\\"password\\"`, `\/`-escaped slashes in URLs);
-- `mysql -pPASSWORD`, PGP private key blocks, `npm_` / `hf_` tokens, and bare AWS secret access
-  keys without a key name;
+- encodings other than one level of base64 and JSON string escapes: hex, double base64, zero-width
+  characters (URL-encoding is decoded for home paths only);
+- base64 variants: the URL-safe alphabet;
+- `npm_` / `hf_` tokens, and bare AWS secret access keys without a key name;
+- a lower-case Git Bash or Cygwin home path with nothing after the user (`/c/users/<user>`), and a
+  project-folder name right after `(`, `[`, `:` or `,` (`(-home-<user>-proj)`);
+- shapes the reference keeps as well: a bare `C:\Users` with no user, `\/home\/<user>` (JSON-escaped
+  slashes) in arbitrary strings, `~user/` paths, a URL-encoded SigV4 signature;
+- CLI mode leaves out the reference client's product-domain host rule;
 - in streaming mode a line longer than 1 MiB is cut into pieces, and a secret across the cut is missed;
 - vendor token shapes that are not in the rule table. Report missing shapes, see below.
 
-It also has false positives on code: `token = get_token()` loses `get_token`, for example.
+It also has false positives on code: a long name after `1//` or a newer key prefix
+(`n = 1//batch_size_per_device`, `pip install xai-grok-sdk-…`), `999.10.10.10`, or `token: 12345678`.
 
 ### What the third-party pass misses
 

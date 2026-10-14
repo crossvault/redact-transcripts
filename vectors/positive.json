@@ -172,7 +172,7 @@
     },
     {
       "id": "private-key-block",
-      "description": "multi-line PEM private key block",
+      "description": "multi-line PEM private key block; the block's line breaks are kept",
       "mode": "text",
       "input": "key:\n-----BEGIN PRIVATE KEY-----\nFAKEEXAMPLEFAKEEXAMPLEFAKEEXAMPLE\nNOTAREALKEYNOTAREALKEY\n-----END PRIVATE KEY-----\nafter\n",
       "expect": "redacted",
@@ -183,7 +183,7 @@
         "FAKEEXAMPLEFAKEEXAMPLE",
         "NOTAREALKEY"
       ],
-      "output": "key:\n[REDACTED:secret.private_key]\nafter\n"
+      "output": "key:\n[REDACTED:secret.private_key]\n\n\n\nafter\n"
     },
     {
       "id": "private-key-unterminated",
@@ -197,7 +197,7 @@
       "absent": [
         "FAKEEXAMPLETRUNCATED"
       ],
-      "output": "paste:\n[REDACTED:secret.private_key]"
+      "output": "paste:\n[REDACTED:secret.private_key]\n\n"
     },
     {
       "id": "bearer-header",
@@ -206,12 +206,12 @@
       "input": "Authorization: Bearer FAKE-EXAMPLE-0000-token\n",
       "expect": "redacted",
       "rules": [
-        "secret.bearer"
+        "secret.auth_header"
       ],
       "absent": [
         "FAKE-EXAMPLE-0000-token"
       ],
-      "output": "Authorization: Bearer [REDACTED:secret.bearer]\n"
+      "output": "Authorization: Bearer [REDACTED:secret.auth_header]\n"
     },
     {
       "id": "url-credentials",
@@ -247,7 +247,7 @@
       "input": "tool --api-key=FAKE-EXAMPLE-key\n",
       "expect": "redacted",
       "rules": [
-        "secret.cli_flag"
+        "secret.assignment"
       ],
       "absent": [
         "FAKE-EXAMPLE-key"
@@ -287,7 +287,7 @@
       "input": "client_secret: \"FAKE-EXAMPLE-secret\"\n",
       "expect": "redacted",
       "rules": [
-        "secret.assignment"
+        "secret.nested_assignment"
       ],
       "absent": [
         "FAKE-EXAMPLE-secret"
@@ -300,7 +300,7 @@
       "input": "password=FAKE1\n",
       "expect": "redacted",
       "rules": [
-        "secret.assignment"
+        "secret.weakpass"
       ],
       "absent": [
         "FAKE1"
@@ -317,7 +317,7 @@
       ],
       "absent": [
         "FAKEEXAMPLEFAKEEXAMPLE",
-        "FAKEEXAMPLE0000"
+        "NOTAREALKEY"
       ]
     },
     {
@@ -459,13 +459,13 @@
       "input": "password = \"FAKE hunter EXAMPLE\"\n",
       "expect": "redacted",
       "rules": [
-        "secret.assignment"
+        "secret.quoted_assignment"
       ],
       "absent": [
         "FAKE hunter EXAMPLE",
         "hunter EXAMPLE"
       ],
-      "output": "password = \"[REDACTED:secret.assignment]\"\n"
+      "output": "password = \"[REDACTED:secret.quoted_assignment]\"\n"
     },
     {
       "id": "single-quoted-secret-with-spaces",
@@ -474,7 +474,7 @@
       "input": "client_secret: 'FAKE EXAMPLE words'\n",
       "expect": "redacted",
       "rules": [
-        "secret.assignment"
+        "secret.quoted_assignment"
       ],
       "absent": [
         "FAKE EXAMPLE words",
@@ -488,7 +488,7 @@
       "input": "{\\\"password\\\":\\\"FAKE two EXAMPLE\\\"}\n",
       "expect": "redacted",
       "rules": [
-        "secret.assignment"
+        "secret.json_assignment"
       ],
       "absent": [
         "FAKE two EXAMPLE",
@@ -608,6 +608,282 @@
         "4321",
         "8642",
         "40961234"
+      ]
+    },
+    {
+      "id": "openrouter-key",
+      "description": "secret.openrouter_key openrouter key",
+      "mode": "text",
+      "input": "here it is: sk-or-v1-FAKEEXAMPLE000000000000aBcD ok\n",
+      "expect": "redacted",
+      "rules": [
+        "secret.openrouter_key"
+      ],
+      "absent": [
+        "sk-or-v1-FAKEEXAMPLE000000000000aBcD"
+      ],
+      "output": "here it is: [REDACTED:secret.openrouter_key] ok\n"
+    },
+    {
+      "id": "google-oauth-access-token",
+      "description": "secret.google_oauth_token google oauth access token",
+      "mode": "text",
+      "input": "here it is: ya29.FAKEEXAMPLE0000000000aBcD ok\n",
+      "expect": "redacted",
+      "rules": [
+        "secret.google_oauth_token"
+      ],
+      "absent": [
+        "ya29.FAKEEXAMPLE0000000000aBcD"
+      ],
+      "output": "here it is: [REDACTED:secret.google_oauth_token] ok\n"
+    },
+    {
+      "id": "google-oauth-refresh-token",
+      "description": "secret.google_oauth_token google oauth refresh token",
+      "mode": "text",
+      "input": "here it is: 1//0FAKEEXAMPLE0000000000000000000aBcD ok\n",
+      "expect": "redacted",
+      "rules": [
+        "secret.google_oauth_token"
+      ],
+      "absent": [
+        "1//0FAKEEXAMPLE0000000000000000000aBcD"
+      ],
+      "output": "here it is: [REDACTED:secret.google_oauth_token] ok\n"
+    },
+    {
+      "id": "google-oauth-client-secret",
+      "description": "secret.google_oauth_client_secret google oauth client secret",
+      "mode": "text",
+      "input": "here it is: GOCSPX-FAKEEXAMPLE000000000aBcD ok\n",
+      "expect": "redacted",
+      "rules": [
+        "secret.google_oauth_client_secret"
+      ],
+      "absent": [
+        "GOCSPX-FAKEEXAMPLE000000000aBcD"
+      ],
+      "output": "here it is: [REDACTED:secret.google_oauth_client_secret] ok\n"
+    },
+    {
+      "id": "groq-key",
+      "description": "secret.groq_key groq key",
+      "mode": "text",
+      "input": "here it is: gsk_FAKEEXAMPLE000000000000aBcD ok\n",
+      "expect": "redacted",
+      "rules": [
+        "secret.groq_key"
+      ],
+      "absent": [
+        "gsk_FAKEEXAMPLE000000000000aBcD"
+      ],
+      "output": "here it is: [REDACTED:secret.groq_key] ok\n"
+    },
+    {
+      "id": "xai-key",
+      "description": "secret.xai_key xai key",
+      "mode": "text",
+      "input": "here it is: xai-FAKEEXAMPLE000000000000aBcD ok\n",
+      "expect": "redacted",
+      "rules": [
+        "secret.xai_key"
+      ],
+      "absent": [
+        "xai-FAKEEXAMPLE000000000000aBcD"
+      ],
+      "output": "here it is: [REDACTED:secret.xai_key] ok\n"
+    },
+    {
+      "id": "stripe-webhook-secret",
+      "description": "secret.stripe_webhook_secret stripe webhook secret",
+      "mode": "text",
+      "input": "here it is: whsec_FAKEEXAMPLE00000000000000000000 ok\n",
+      "expect": "redacted",
+      "rules": [
+        "secret.stripe_webhook_secret"
+      ],
+      "absent": [
+        "whsec_FAKEEXAMPLE00000000000000000000"
+      ],
+      "output": "here it is: [REDACTED:secret.stripe_webhook_secret] ok\n"
+    },
+    {
+      "id": "zai-key",
+      "description": "secret.zai_key zai key",
+      "mode": "text",
+      "input": "here it is: 0123456789abcdef0123456789abcdef.FAKEEXAMPLE00000 ok\n",
+      "expect": "redacted",
+      "rules": [
+        "secret.zai_key"
+      ],
+      "absent": [
+        "0123456789abcdef0123456789abcdef.FAKEEXAMPLE00000"
+      ],
+      "output": "here it is: [REDACTED:secret.zai_key] ok\n"
+    },
+    {
+      "id": "github-token-after-underscore",
+      "description": "secret.github_token github token after underscore",
+      "mode": "text",
+      "input": "export CONF_ghp_FAKEEXAMPLE000000000000000000000000 ok\n",
+      "expect": "redacted",
+      "rules": [
+        "secret.github_token"
+      ],
+      "absent": [
+        "ghp_FAKEEXAMPLE000000000000000000000000"
+      ],
+      "output": "export CONF_[REDACTED:secret.github_token] ok\n"
+    },
+    {
+      "id": "aws-key-id-after-url-escape",
+      "description": "secret.aws_key_id aws key id after url escape",
+      "mode": "text",
+      "input": "https://x.example/?k=%20AKIAFAKEEXAMPLE00000&a=1\n",
+      "expect": "redacted",
+      "rules": [
+        "secret.aws_key_id"
+      ],
+      "absent": [
+        "AKIAFAKEEXAMPLE00000"
+      ],
+      "output": "https://x.example/?k=%20[REDACTED:secret.aws_key_id]&a=1\n"
+    },
+    {
+      "id": "github-token-followed-by-underscore-word",
+      "description": "secret.github_token github token followed by underscore word",
+      "mode": "text",
+      "input": "key ghp_FAKEEXAMPLE000000000000000000000000_notes ok\n",
+      "expect": "redacted",
+      "rules": [
+        "secret.github_token"
+      ],
+      "absent": [
+        "ghp_FAKEEXAMPLE000000000000000000000000"
+      ],
+      "output": "key [REDACTED:secret.github_token]_notes ok\n"
+    },
+    {
+      "id": "github-token-glued",
+      "description": "secret.github_token github token glued",
+      "mode": "text",
+      "input": "notesghp_FAKEEXAMPLE0000000000000000000000000 ok\n",
+      "expect": "redacted",
+      "rules": [
+        "secret.github_token"
+      ],
+      "absent": [
+        "ghp_FAKEEXAMPLE0000000000000000000000000"
+      ],
+      "output": "notes[REDACTED:secret.github_token] ok\n"
+    },
+    {
+      "id": "stripe-key-after-literal-newline-escape",
+      "description": "secret.stripe_key stripe key after literal newline escape",
+      "mode": "text",
+      "input": "{\"c\":\"line\\nsk_test_FAKEEXAMPLE00000000\"}\n",
+      "expect": "redacted",
+      "rules": [
+        "secret.stripe_key"
+      ],
+      "absent": [
+        "sk_test_FAKEEXAMPLE00000000"
+      ],
+      "output": "{\"c\":\"line\\n[REDACTED:secret.stripe_key]\"}\n"
+    },
+    {
+      "id": "mysql-p-flag",
+      "description": "mysql -pPASSWORD (password glued to -p, on a mysql/mariadb command line)",
+      "mode": "text",
+      "input": "mysql -uroot -pFAKEpassword db\n",
+      "expect": "redacted",
+      "rules": [
+        "secret.mysql_password"
+      ],
+      "absent": [
+        "FAKEpassword"
+      ]
+    },
+    {
+      "id": "double-escaped-json",
+      "description": "two levels of backslash escaping",
+      "mode": "text",
+      "input": "{\\\\\"password\\\\\":\\\\\"FAKE-x\\\\\"}\n",
+      "expect": "redacted",
+      "rules": [
+        "secret.nested_assignment"
+      ],
+      "absent": [
+        "FAKE-x"
+      ]
+    },
+    {
+      "id": "octet-over-255",
+      "description": "dotted quad with an octet over 255 (over-redacted, in step with the reference rules)",
+      "mode": "text",
+      "input": "value 999.10.10.10\n",
+      "expect": "redacted",
+      "rules": [
+        "infra.ipv4"
+      ],
+      "absent": []
+    },
+    {
+      "id": "counter-token-numeric",
+      "description": "digits under a token key are not a token (over-redacted, in step with the reference rules)",
+      "mode": "text",
+      "input": "token: 12345678\n",
+      "expect": "redacted",
+      "rules": [
+        "secret.assignment"
+      ],
+      "absent": []
+    },
+    {
+      "id": "python-floor-division-long-name",
+      "description": "python floor division long name (over-redacted, in step with the reference rules)",
+      "mode": "text",
+      "input": "n = 1//batch_size_per_device_for_training_run\n",
+      "expect": "redacted",
+      "rules": [
+        "secret.google_oauth_token"
+      ],
+      "absent": []
+    },
+    {
+      "id": "package-name-with-vendor-prefix",
+      "description": "package name with vendor prefix (over-redacted, in step with the reference rules)",
+      "mode": "text",
+      "input": "pip install xai-grok-sdk-python-integration-helpers\n",
+      "expect": "redacted",
+      "rules": [
+        "secret.xai_key"
+      ],
+      "absent": []
+    },
+    {
+      "id": "md5-dot-word",
+      "description": "md5 dot word (over-redacted, in step with the reference rules)",
+      "mode": "text",
+      "input": "0123456789abcdef0123456789abcdef.localdomainhostx\n",
+      "expect": "redacted",
+      "rules": [
+        "secret.zai_key"
+      ],
+      "absent": []
+    },
+    {
+      "id": "zero-width-split",
+      "description": "a zero-width space inside a token: the part before it is redacted (CLI mode's short ghp_ rule), the rest stays",
+      "mode": "text",
+      "input": "ghp_FAKEEXAMPLE​000000000000000000000000\n",
+      "expect": "redacted",
+      "rules": [
+        "secret.github_token"
+      ],
+      "absent": [
+        "ghp_FAKEEXAMPLE"
       ]
     }
   ]

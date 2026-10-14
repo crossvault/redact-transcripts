@@ -38,13 +38,6 @@
       "expect": "known_miss"
     },
     {
-      "id": "zero-width-split",
-      "description": "a zero-width space inside a token",
-      "mode": "text",
-      "input": "ghp_FAKEEXAMPLE​000000000000000000000000\n",
-      "expect": "known_miss"
-    },
-    {
       "id": "hostname",
       "description": "an internal hostname (hostnames are not a rule)",
       "mode": "text",
@@ -59,13 +52,6 @@
       "expect": "known_miss"
     },
     {
-      "id": "mysql-p-flag",
-      "description": "mysql -pPASSWORD (no separator)",
-      "mode": "text",
-      "input": "mysql -uroot -pFAKEpassword db\n",
-      "expect": "known_miss"
-    },
-    {
       "id": "npm-token",
       "description": "npm token shape is not in the rule table",
       "mode": "text",
@@ -73,10 +59,10 @@
       "expect": "known_miss"
     },
     {
-      "id": "double-escaped-json",
-      "description": "two levels of backslash escaping",
+      "id": "git-bash-lowercase-home",
+      "description": "a lower-case Git Bash or Cygwin home path with nothing after the user name (pending in the reference rules)",
       "mode": "text",
-      "input": "{\\\\\"password\\\\\":\\\\\"FAKE-x\\\\\"}\n",
+      "input": "cd /c/users/fakeuser\n",
       "expect": "known_miss"
     }
   ]
