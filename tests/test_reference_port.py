@@ -295,3 +295,61 @@ def test_a_repeated_key_under_a_secret_parent_is_judged_against_it():
     out, report = jsonl('{"password":{"v":"FAKEone1","v":"FAKEtwo2"}}\n')
     assert "FAKEone1" not in out and "FAKEtwo2" not in out
     assert report.rules == {"secret.keyed_value": 2}
+
+
+# --- platform tokens -----------------------------------------------------------------------------
+
+B32 = "abcdefghijklmnopqrstuvwxyz234567" + "abcdefghijklmnopqrst"  # 52 base32 characters
+
+
+@pytest.mark.parametrize(
+    "text,secret,rule",
+    [
+        ("key " + "to" + "k_FAKEEXAMPLE0000000a1 end", "FAKEEXAMPLE0000000a1", "secret.prefixed_api_token"),
+        ("FOO_" + "po" + "l_FAKEEXAMPLE0000000a1", "FAKEEXAMPLE0000000a1", "secret.prefixed_api_token"),
+        ("x " + "p" + "t_FAKEEXAMPLE0000000a1", "FAKEEXAMPLE0000000a1", "secret.prefixed_api_token"),
+        ("x " + "em" + "it_FAKEEXAMPLE0000000a1", "FAKEEXAMPLE0000000a1", "secret.prefixed_api_token"),
+        ("x " + "ge_" + "emit_" + B32, B32, "secret.prefixed_api_token"),
+        ("x " + "ge_" + "sess_FAKEEXAMPLE-0000 y", "FAKEEXAMPLE-0000", "secret.a4sx_session"),
+    ],
+)
+def test_platform_tokens(text, secret, rule):
+    counts = {}
+    out = R.redact_text(text, counts)
+    assert secret not in out and rule in counts, (out, counts)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "session_" + "tok_3f9aFAKEEXAMPLE000000",
+        "on_" + "emit_UserCreated2FA",
+        "HASH_" + "tok_abcdef0123456789/x",
+    ],
+)
+def test_platform_token_look_alikes_stay(text):
+    assert red(text) == text
+
+
+# --- CLI mode (the reference client's raw-JSONL pass) --------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "text,secret",
+    [
+        ("step one\\n--password FAKEpw1 next", "FAKEpw1"),
+        ("pwd=FAKEXC:\\Users\\x", "FAKEX"),
+        (
+            "AK" + "IA" + "FAKEFAKE01234567" + _b64url({"alg": "HS256"}) + "." + _b64url({"s": 1}) + ".sig",
+            "FAKEFAKE0123",
+        ),
+        ("xé10.1.2.3", "10.1.2.3"),
+    ],
+)
+def test_cli_mode_boundaries(text, secret):
+    assert secret not in red(text)
+
+
+def test_cli_mode_can_be_turned_off():
+    text = "step one\\n--password FAKEpw1 next"
+    assert Redactor(disable=["cli_mode"]).redact_text(text) == text

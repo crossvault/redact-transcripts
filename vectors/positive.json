@@ -872,6 +872,19 @@
         "secret.zai_key"
       ],
       "absent": []
+    },
+    {
+      "id": "zero-width-split",
+      "description": "a zero-width space inside a token: the part before it is redacted (CLI mode's short ghp_ rule), the rest stays",
+      "mode": "text",
+      "input": "ghp_FAKEEXAMPLE​000000000000000000000000\n",
+      "expect": "redacted",
+      "rules": [
+        "secret.github_token"
+      ],
+      "absent": [
+        "ghp_FAKEEXAMPLE"
+      ]
     }
   ]
 }

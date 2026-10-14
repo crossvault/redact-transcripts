@@ -223,7 +223,8 @@ def _sr_span(*groups):
 
 
 _SR_V2_PFX = r"sk-(?:proj|svcacct|admin|or-v1)-|AIza|ya29\.|1//|GOCSPX-|gsk_|xai-"
-_SR_CLASSIC_PFX = r"gh[pousr]_|github_pat_|sk-|xox[baprs]-|A[KS]IA|(?:sk|rk)_(?:live|test)_|whsec_"
+_SR_CLASSIC_PFX = (r"gh[pousr]_|github_pat_|sk-|xox[baprs]-|A[KS]IA|(?:sk|rk)_(?:live|test)_|whsec_|"
+                   r"ge_sess_|ge_(?:tok|emit|read|admin|adm|reg)_")
 # a classic key body never runs into a newer key's letter-led prefix written right after
 # it (`ghp_<36>AIza…`, `sk_live_<24>ya29.…`): the body ends there and the newer key keeps its own start.
 # The lookahead is a fixed set of short literals, so each step stays constant-time.
@@ -259,25 +260,28 @@ _SR_CLASSIC_KEYS = (r"gh[pousr]_" + _sr_cbr("A-Za-z0-9", 20, 4096) + r"|github_p
                     + r"|sk-ant-" + _sr_cbr("A-Za-z0-9_-", 12, 4096) + r"|sk-" + _sr_cbr("A-Za-z0-9", 20, 4096)
                     + r"|xox[baprs]-" + _sr_cbr("A-Za-z0-9-", 10, 4096) + r"|"
                     r"A[KS]IA[0-9A-Z]{16}|(?:sk|rk)_(?:live|test)_" + _sr_cbr("A-Za-z0-9", 16, 4096) + r"|"
-                    r"whsec_" + _sr_cbr("A-Za-z0-9", 16, 4096) + r"|"
+                    r"whsec_" + _sr_cbr("A-Za-z0-9", 16, 4096) + r"|ge_sess_" + _sr_cbr("A-Za-z0-9_-", 6, 4096) + r"|"
+                    r"ge_(?:tok|emit|read|admin|adm|reg)_" + _sr_cbr("A-Za-z0-9", 3, 4096) + r"|"
                     r"[0-9a-f]{32}\.[A-Za-z0-9]{16}")
 # a key glued straight onto a letter or digit (`notesghp_…`, `idAKIA…`) has no `\b` before its
 # prefix, so it gets its own start (`v8`), but only with the exact vendor shape (fixed literal starts,
-# so linear) and a body that passes _sr_glued_key_like.
+# so linear) and a body that passes _sr_glued_key_like. Platform tokens are base32 (`[a-z2-7]{52}`).
 _SR_GLUED = (r"gh[pousr]_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9]{22}_[A-Za-z0-9]{59}|"
              r"sk-(?:proj|svcacct|admin|or-v1)-[A-Za-z0-9_-]{40,256}|"
              r"sk-ant-(?:api|admin|oat|ort)[0-9]{2}-[A-Za-z0-9_-]{40,256}|sk-[A-Za-z0-9]{48}|"
              r"xox[baprs]-[0-9]{1,16}-[A-Za-z0-9-]{10,256}|A[KS]IA[0-9A-Z]{16}|"
-             r"(?:sk|rk)_(?:live|test)_[A-Za-z0-9]{24,256}|whsec_[A-Za-z0-9]{32,256}")
-# The classic shapes right after `_` or a URL escape (`CONF_ghp_…`, `?k=%20AKIA…`), group `v7`:
-# `\b` never fires there. A body `_` that opens another key prefix ends the body (linear, as in
-# _SR_V2_KEYS_US below).
+             r"(?:sk|rk)_(?:live|test)_[A-Za-z0-9]{24,256}|whsec_[A-Za-z0-9]{32,256}|"
+             r"ge_(?:tok|emit|read|admin|adm|reg|sess)_[a-z2-7]{52}")
+# The classic shapes right after `_` or a URL escape (`CONF_ghp_…`, `?k=%20AKIA…`), group `v7`, # `\b` never fires there. A body `_` that opens another key prefix ends the body (linear, as in
+# _SR_V2_KEYS_US below), and the platform-token minimums are raised so `x_ge_read_all` stays a name.
 _SR_CLS_US_BODY = r"(?:" + _SR_NOT_V2 + r"[A-Za-z0-9-]|_(?!" + _SR_CLASSIC_PFX + "|" + _SR_V2_PFX + r"))"
 _SR_CLASSIC_KEYS_US = (r"gh[pousr]_" + _sr_cbr("A-Za-z0-9", 20, 4096) + r"|github_pat_" + _SR_CLS_US_BODY
                        + r"{20,256}|sk-ant-" + _SR_CLS_US_BODY + r"{12,256}|sk-" + _sr_cbr("A-Za-z0-9", 20, 4096)
                        + r"|xox[baprs]-" + _sr_cbr("A-Za-z0-9-", 10, 4096) + r"|A[KS]IA[0-9A-Z]{16}|"
                        r"(?:sk|rk)_(?:live|test)_" + _sr_cbr("A-Za-z0-9", 16, 4096) + r"|whsec_" + _sr_cbr("A-Za-z0-9", 16, 4096)
-                       + r"|[0-9a-f]{32}\.[A-Za-z0-9]{16}")
+                       + r"|"
+                       r"ge_sess_" + _SR_CLS_US_BODY + r"{16,256}|"
+                       r"ge_(?:tok|emit|read|admin|adm|reg)_[A-Za-z0-9]{16,4096}|[0-9a-f]{32}\.[A-Za-z0-9]{16}")
 # After `_` a start can sit INSIDE a body run (`a_sk-proj-a_sk-proj-…`). A `_` that opens another key
 # prefix ends the body, so each start scans only up to the next start and the rule stays linear
 # (the earlier plain body re-scanned up to 256 characters per start: ~30x slower on that shape). The bodies
@@ -294,11 +298,11 @@ _SR_V2_KEYS_US = (r"sk-(?:proj|svcacct|admin|or-v1)-" + _SR_V2_US_BODY + r"{20,2
 # ends at a non-base64 character, so a base64 run (`…AIza…/AbC+…`) is still left alone.
 # or the cut-off end of a base64-style value (`AIza<35>+`, `xai-…==`): one to three `+`/`=`
 # that no letter or digit follows, so a base64 run (`…AIza…+AbC…`) still ends nowhere.
-# or a marker an earlier rule put right after it (`AIza<35>-[REDACTED]`: the classic
-# key next to a newer one may already be a marker).
+# or a marker an earlier rule put right after it (`AIza<35>-[REDACTED]`; the CLI-mode
+# key rules run first, so the classic key next to a newer one is already a marker there).
 _SR_V2_TAIL = (r"(?=[_-][A-Za-z0-9]|(?:/[A-Za-z0-9._~-]{1,64}){1,8}(?![A-Za-z0-9+/=])|[+=]{1,3}(?![A-Za-z0-9])"
                r"|_?(?:" + _SR_CLASSIC_PFX + "|" + _SR_V2_PFX + r")|[0-9a-f]{32}\.[A-Za-z0-9]{16}|[_-]?\[REDACTED)")
-# The `v9`/`v10` body never runs into another key's prefix (`sk-or-v1-<hex>ghp_…/x`): a run through
+# The `v9`/`v10` body never runs into another key's prefix (`sk-or-v1-<hex>ge_tok_…/x`): a run through
 # it fails the key-like check and the rejected match would hide both keys. Prefixes are
 # literal, so the lookahead is bounded and the rule stays linear.
 # only where a whole key starts (an exact glued classic shape or a newer key's
@@ -338,7 +342,7 @@ def _sr_key_like_body(body):
 # `slack_xoxb-tokens-and-scopes-guide` or `my_sk-ant-api-key-placeholder` is a name, not a key. Real
 # keys of these shapes are random: they mix upper and lower case (`sk-ant-api03-…`, `github_pat_11…`,
 # the last part of `xoxb-…`) or are digit-dense (`xoxp-<numbers>-<lowercase hex>`), with `-`/`_`
-# allowed between the parts. The other classic shapes (`AKIA…`, `ghp_…`, `sk_live_…`)
+# allowed between the parts. The other classic shapes (`AKIA…`, `ghp_…`, `sk_live_…`, platform tokens)
 # have no word-shaped body and keep matching as before.
 _SR_CLS_WORDY = _sr_re.compile(r"xox[baprs]-|sk-ant-|github_pat_")
 
@@ -358,18 +362,22 @@ def _sr_cls_key_like(body):
 # where a classic key ends. `\b` as before, or right before `_` (`ghp_…_notes`, where `\b` never
 # fires) unless that `_` opens the next key together with the letters before it (`xoxb-notes-ghp_…`):
 # then the body backs off to its last `\b`, as before, and the next key keeps its own start.
-# or right before the next key's prefix (`AKIA<16>ghp_…`, written back to back): a fixed-length
+# or right before the next key's prefix (`AKIA<16>ge_tok_…`, written back to back): a fixed-length
 # body (`AKIA…`) has no `\b` there; a longer body takes the prefix letters and the rest is `token_tail`'s.
 _SR_CLS_END = (r"(?:\b|(?=_)(?!(?<=gh[pousr])_|(?<=github)_pat_|(?<=[sr]k)_(?:live|test)_|(?<=whsec)_"
-               r"|(?<=gsk)_)"
+               r"|(?<=ge)_(?:sess|tok|emit|read|admin|adm|reg)_|(?<=gsk)_)"
                r"|(?=" + _SR_CLASSIC_PFX + "|" + _SR_V2_PFX + r"|[0-9a-f]{32}\.[A-Za-z0-9]{16}))")
 _SR_CLASSIC_PFX_RE = _sr_re.compile(_SR_CLASSIC_PFX + "|" + _SR_V2_PFX)
+_SR_PLATFORM_B32 = _sr_re.compile(r"ge_(?:tok|emit|read|admin|adm|reg|sess)_[a-z2-7]{52}")
 
 
 def _sr_glued_key_like(tok):
     """a classic key that ends right before `_` (`ghp_…_notes`) or starts right after a letter or
     digit (`notesAKIA…`). The trailing `_` makes it look like an identifier, so it counts only as a
-    real key: a body that passes _sr_cls_key_like. `storage_read_bytes` stays a name."""
+    real key: a minted base32 platform token, or a body that passes _sr_cls_key_like. `ge_read_all_items`
+    and `storage_read_bytes` stay names."""
+    if _SR_PLATFORM_B32.fullmatch(tok):
+        return True
     p = _SR_CLASSIC_PFX_RE.match(tok)
     return _sr_cls_key_like(tok[p.end():] if p else tok)
 # The binary spans of the last text a key was found in: one span pass per text. The text is keyed by
@@ -474,7 +482,8 @@ _SR_CLASSIC_KEYS_PREV = (
     + r"{20,4096}|sk-ant-" + _sr_cb_prev("A-Za-z0-9_-") + r"{12,4096}|sk-" + _sr_cb_prev("A-Za-z0-9")
     + r"{20,4096}|xox[baprs]-" + _sr_cb_prev("A-Za-z0-9-") + r"{10,4096}|"
     r"A[KS]IA[0-9A-Z]{16}|(?:sk|rk)_(?:live|test)_" + _sr_cb_prev("A-Za-z0-9") + r"{16,4096}|"
-    r"whsec_" + _sr_cb_prev("A-Za-z0-9") + r"{16,4096}|"
+    r"whsec_" + _sr_cb_prev("A-Za-z0-9") + r"{16,4096}|ge_sess_" + _sr_cb_prev("A-Za-z0-9_-") + r"{6,4096}|"
+    r"ge_(?:tok|emit|read|admin|adm|reg)_" + _sr_cb_prev("A-Za-z0-9") + r"{3,4096}|"
     r"[0-9a-f]{32}\.[A-Za-z0-9]{16}")
 _SR_CLS_US_BODY_PREV = (r"(?:" + _SR_NOT_V2_PREV + r"[A-Za-z0-9-]|_(?!" + _SR_CLASSIC_PFX + "|" + _SR_V2_PFX
                         + r"))")
@@ -483,7 +492,8 @@ _SR_CLASSIC_KEYS_US_PREV = (
     + r"{20,256}|sk-ant-" + _SR_CLS_US_BODY_PREV + r"{12,256}|sk-" + _sr_cb_prev("A-Za-z0-9")
     + r"{20,4096}|xox[baprs]-" + _sr_cb_prev("A-Za-z0-9-") + r"{10,4096}|A[KS]IA[0-9A-Z]{16}|"
     r"(?:sk|rk)_(?:live|test)_" + _sr_cb_prev("A-Za-z0-9") + r"{16,4096}|whsec_" + _sr_cb_prev("A-Za-z0-9")
-    + r"{16,4096}|[0-9a-f]{32}\.[A-Za-z0-9]{16}")
+    + r"{16,4096}|ge_sess_" + _SR_CLS_US_BODY_PREV + r"{16,256}|"
+    r"ge_(?:tok|emit|read|admin|adm|reg)_[A-Za-z0-9]{16,4096}|[0-9a-f]{32}\.[A-Za-z0-9]{16}")
 _SR_V2_NB_BODY_PREV = r"(?:(?!_?(?:" + _SR_CLASSIC_PFX + "|" + _SR_V2_PFX + r"))[A-Za-z0-9_-])"
 _SR_V2_KEYS_NB_PREV = (
     r"sk-(?:proj|svcacct|admin|or-v1)-" + _SR_V2_NB_BODY_PREV + r"{20,4096}|AIza" + _SR_V2_NB_BODY_PREV
@@ -702,8 +712,8 @@ def sr_name_reconcile(a, ref, names):
 
 
 def sr_name_reconciled(run, alt_rules=False):
-    """`run()` -> (text, ...): one whole scrub of a text. If the name exemption kept a name (or `alt_rules`), the
-    reference run is made as well:
+    """`run()` -> (text, ...): one whole scrub of a text. If the name exemption kept a name, or `alt_rules` (the
+    CLI-mode `sk-ant-`/`ge_sess_` rules differ from the shared ones on this text), the reference run is made as well:
     no exemption (`off`), and with `alt_rules` also develop's rules (`ref`). The result is reconciled per line
     (sr_name_reconcile), with the first run's other results when every line came from it, else the develop
     reference run's. A nested call (the outer scrub reconciles) runs once."""
@@ -1332,6 +1342,7 @@ SR_PRECHECK = {
     "nested_assignment": ("pass", "secret", "token", "key", "cred", "auth", "pwd"),
     "assignment": ("key", "secret", "token", "passw", "bearer", "credential"),
     "weakpass": ("passw",),
+    "prefixed_api_token": ("pol_", "pt_", "tok_", "emit_"),
     "inline_userpass": ("-u",),
     "cmd_password": ("pass", "pwd"),
     "cmd_userpass": ("-u",),
@@ -1359,7 +1370,7 @@ def sr_rules(raw_json=False):
     ws = r"[ \t]" if raw_json else r"\s"      # raw JSONL has no real line breaks inside a value
     cls = r"A-Za-z0-9._~+/=:\-"
     rules = [
-        # Known token shapes (GitHub, OpenAI, Anthropic, Slack, AWS, Stripe, Google, Groq, xAI, z.ai key).
+        # Known token shapes (GitHub, OpenAI, Anthropic, Slack, AWS, Stripe, platform tokens, z.ai key).
         # The `sk-` alternative is OpenAI's HYPHEN form and matches none of Stripe's; a live webhook
         # signing secret was missed because of that gap. `pk_` is absent on
         # purpose: publishable keys are public by design. Every run is token characters only, so it
@@ -1386,7 +1397,7 @@ def sr_rules(raw_json=False):
         # keys written back to back (`sk-<48>sk-<48>`, `ghp_<36>xoxb-…`). A variable-length body
         # takes the next key's prefix letters (`…sk`, `…ghp`), so the next key's body is left right
         # after the marker (`[REDACTED]-<48>`). A key-like run glued to a secret marker is redacted
-        # with it. Runs after the `token` rule, so the marker exists.
+        # with it. Runs after the `token` rule (and the CLI-mode key rules), so the marker exists.
         # the previous body may also take the next key's prefix up to its `.`/`//`
         # (`…ya29` then `.<body>`, `…1` then `//<body>`, a z.ai key's hex then `.<16>`), so one `.` or
         # `//` may sit between the marker and the run; there a name stays (_sr_identifier_run).
@@ -1516,6 +1527,34 @@ def sr_rules(raw_json=False):
         + "(?i:" + SR_TYPING_VALUE + ")(?!" + _SR_MARK + r"(?:\)|(?!" + v + r"|[,;]" + v + r")))"
         r"(?P<v>(?:" + v + r"|[,;](?=" + v + r")){3," + n + r"})" + q + r"(?:['\"](?!" + v + r"))?"),
         check_weakpass))
+    # Platform tokens with a bare prefix (`tok_...`, `pol_...`): no vendor shape and no keyword. The
+    # prefix may be glued by `_` to an ENV-style name (`FOO_tok_...`, `MY_APP_pol_...`); the value
+    # then needs a letter AND a digit. A glued match is NOT a token when the name is not upper case
+    # (`session_tok_3f9a...`, `on_emit_UserCreated2FA`, `parse_tok_Utf8...`), when it sits in a path
+    # segment (after `/`, `\`, `.` or `-`), or when a file extension or `/` follows it: hash-named
+    # files key `trackedFileBackups`, and rewriting them breaks resume.
+    def check_tok(m):
+        a, e = m.span("v")
+        st = m.string
+        if a and st[a - 1] == "_":
+            body = m.group("v").split("_", 1)[1]
+            if not (any(c.isdigit() for c in body) and any(c.isalpha() for c in body)):
+                return None
+            i = a - 1                                    # the `_` that glues the prefix
+            j = i
+            while j > 0 and i - j < 64 and (st[j - 1].isalnum() or st[j - 1] == "_"):
+                j -= 1
+            name = st[j:i]
+            if (not name or not name[0].isalpha() or name != name.upper() or i - j >= 64
+                    or (j > 0 and st[j - 1] in "/\\.-")):
+                return None
+            nxt = st[e:e + 2]
+            if nxt[:1] == "/" or (nxt[:1] == "." and nxt[1:2].isalnum()):
+                return None
+        return m.span("v")
+    rules.append(("prefixed_api_token", _sr_re.compile(
+        r"(?P<v>(?:pol|pt|tok|emit)_(?<![A-Za-z0-9]pol_)(?<![A-Za-z0-9]pt_)(?<![A-Za-z0-9]tok_)"
+        r"(?<![A-Za-z0-9]emit_)[A-Za-z0-9]{16,4096})"), check_tok))
     # An inline `user%pass` credential (smbclient/curl `-U 'user%pass'`): no keyword, so the
     # assignment rules can't see it. Only the password half is replaced; the user is kept.
     rules.append(("inline_userpass", _sr_re.compile(
@@ -2799,3 +2838,5 @@ def sr_redact_pem(text: str) -> tuple:
         pos = e0
     out.append(text[pos:])
     return "".join(out), len(spans)
+
+

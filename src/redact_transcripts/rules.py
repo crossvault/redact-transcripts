@@ -125,6 +125,9 @@ _VENDORS: Tuple[Tuple["re.Pattern[str]", str], ...] = tuple(
         (r"[rs]k_(?:live|test)_", "secret.stripe_key"),
         (r"whsec_", "secret.stripe_webhook_secret"),
         (r"[0-9a-f]{32}\.", "secret.zai_key"),
+        # a4sx's own tokens: session tokens, and the prefixed platform API tokens
+        (r"ge_sess_", "secret.a4sx_session"),
+        (r"ge_(?:tok|emit|read|admin|adm|reg)_", "secret.prefixed_api_token"),
     )
 )
 VENDOR_RULE_NAMES: Tuple[str, ...] = tuple(dict.fromkeys(n for _p, n in _VENDORS))
@@ -345,6 +348,7 @@ REFERENCE_NAMES: Dict[str, str] = {
     "nested_assignment": "secret.nested_assignment",
     "assignment": "secret.assignment",
     "weakpass": "secret.weakpass",
+    "prefixed_api_token": "secret.prefixed_api_token",
     "inline_userpass": "secret.user_percent_pass",
     "cmd_password": "secret.cli_flag",
     "cmd_userpass": "secret.cmd_userpass",
@@ -430,6 +434,7 @@ def default_rules() -> List[Rule]:
         ref("nested_assignment"),
         ref("assignment"),
         ref("weakpass"),
+        ref("prefixed_api_token"),
         ref("inline_userpass"),
         ref("cmd_password"),
         Rule(

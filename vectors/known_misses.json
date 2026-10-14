@@ -38,13 +38,6 @@
       "expect": "known_miss"
     },
     {
-      "id": "zero-width-split",
-      "description": "a zero-width space inside a token",
-      "mode": "text",
-      "input": "ghp_FAKEEXAMPLE​000000000000000000000000\n",
-      "expect": "known_miss"
-    },
-    {
       "id": "hostname",
       "description": "an internal hostname (hostnames are not a rule)",
       "mode": "text",

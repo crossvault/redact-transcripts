@@ -12,9 +12,11 @@ import re
 from dataclasses import dataclass, field
 from typing import Callable, Dict, FrozenSet, Iterable, List, Optional, Sequence, Tuple
 
+from . import _cli_mode as _cli
 from . import _scrub_rules as _sr
 from .people import DEFAULT_TEMPLATE, KEYED_PERSON, RULE_NAMES, People
 from .rules import (
+    REFERENCE_NAMES,
     Base64Rule,
     PrivateKeyRule,
     Rule,
@@ -22,6 +24,7 @@ from .rules import (
     VendorTokenRule,
     default_rules,
     secret_key_kind,
+    vendor_of,
 )
 
 #: Pseudo-rule for a JSON value stored under a key that names a secret (``{"password": "..."}``).
@@ -29,12 +32,50 @@ KEYED_VALUE = "secret.keyed_value"
 #: Pseudo-rule for a credential spelled with JSON escapes inside a string that is itself JSON text
 #: (``\\u0067hp_…``, ``1\\/\\/…``): found in the decoded view, the whole escaped run is replaced.
 ESCAPED = "secret.escaped"
+#: The reference client's own pass (see :mod:`redact_transcripts._cli_mode`); ``disable=["cli_mode"]``
+#: turns it off.
+CLI_MODE = "cli_mode"
 #: Pseudo-rule for a JSONL line nested too deeply to decode: every string in it is replaced.
 DEEP_NESTING = "secret.deep_nesting"
 
 _PEM_BEGIN = _sr.SR_PEM_BEGIN
 _PEM_END = _sr.SR_PEM_END
 _PRIVATE_KEY = "secret.private_key"
+#: The reference client's rule names (CLI mode, see :mod:`redact_transcripts._cli_mode`) -> rule names here.
+_CLI_NAMES = {
+    "anthropic_key": "secret.anthropic_key",
+    "session_token": "secret.a4sx_session",
+    "github_token": "secret.github_token",
+    "aws_akid": "secret.aws_key_id",
+    "url_cred": "secret.url_credentials",
+    "url_token": "secret.url_token",
+    "gsheet": "secret.gsheet",
+    "mac": "infra.mac",
+    "ipv6": "infra.ipv6",
+    "ip": "infra.ipv4",
+    "keyfile": "infra.keyfile",
+    "email": "pii.email",
+    "homedir": "pii.home_dir",
+}
+
+
+def _touches_marker(s: str, span: Tuple[int, int]) -> bool:
+    """The span is exactly a marker, or cuts into one (this package's markers hold a `:`, which a
+    `user:password` rule could otherwise read as a separator). A span that holds a whole marker and more
+    (a key's rest glued onto its marker) is fine."""
+    a, b = span
+    lo = max(0, a - 80)
+    i = s.rfind("[REDACTED", lo, b)
+    while i >= 0:
+        m = _ANY_MARK.match(s, i)
+        if m is not None and m.end() > a:
+            whole = a <= m.start() and m.end() <= b
+            if not whole or (m.start(), m.end()) == (a, b):
+                return True
+        i = s.rfind("[REDACTED", lo, i)
+    return False
+
+
 # A marker already in the text (this package's, or one the reference rules write): never redacted again.
 _ANY_MARK = re.compile(_sr._SR_MARK)
 #: A redaction can create a match for an EARLIER rule (a marker is a new boundary next to an adjacent
@@ -139,6 +180,13 @@ class Redactor:
         self._secret_only = [
             b for b in self._bound if b[0].name.startswith("secret.") and not isinstance(b[0], Base64Rule)
         ]
+        # CLI mode: the reference client's pass (raw-JSONL rule build, its own key rules), run after the
+        # rules above on the string as it is written inside a JSONL line. It redacts only under the names
+        # of the rules enabled above. Off with `disable=["cli_mode"]`.
+        self.cli_mode_enabled = _enabled(CLI_MODE, disable)
+        self._enabled_names = frozenset(n for r in self.rules for n in r.names)
+        self._cli_rules = _cli.cli_rules() if self.cli_mode_enabled else []
+        self._cli_secret_rules = [r for r in self._cli_rules if not r.pii]
 
     @property
     def rule_names(self) -> List[str]:
@@ -181,7 +229,7 @@ class Redactor:
             end = max(m.end(), sp[1])  # a span may end past the match (a JWT's lookahead)
             name = rule.hit_name(m, sp) if vendor else rule.name  # type: ignore[attr-defined]
             mark = self.marker(name) if name != "pii.home_dir" else self.config.home_dir_placeholder
-            if text[sp[0] : sp[1]] == mark or _ANY_MARK.fullmatch(text, sp[0], sp[1]):
+            if text[sp[0] : sp[1]] == mark or _touches_marker(text, sp):
                 continue  # already a marker (a rule whose value may be one): nothing to redact
             out.append(text[pos : sp[0]])
             out.append(mark)
@@ -289,10 +337,75 @@ class Redactor:
         # A vendor-key-shaped NAME the rules keep (`id-xai-GrokModelConfigLoader`) never keeps any other
         # character that a run without that exemption redacts (see _scrub_rules.sr_name_reconciled).
         out, c = _sr.sr_name_reconciled(run)
+        if self._cli_rules:
+            out = self._cli_pass(out, c, self._cli_rules if bound is self._bound else self._cli_secret_rules)
         if counts is not None:
             for k, v in c.items():
                 counts[k] = counts.get(k, 0) + v
         return out
+
+    def _cli_name(self, rule: "_cli.CliRule", text: str, span: Tuple[int, int]) -> str:
+        if rule.name == "token":
+            return vendor_of(text[span[0] : span[1]])
+        if rule.name in _CLI_NAMES:
+            return _CLI_NAMES[rule.name]
+        return REFERENCE_NAMES.get(rule.name, "secret." + rule.name)
+
+    def _cli_pass(self, text: str, counts: Dict[str, int], rules) -> str:
+        """The reference client's pass over ``text`` as it is written inside a JSONL line: as UTF-8, and
+        for a string with non-ASCII characters also with ``\\uXXXX`` escapes (``ensure_ascii``), where an
+        escape is a boundary the raw character is not."""
+        text = self._cli_pass_as(text, counts, rules, False)
+        if not text.isascii():
+            text = self._cli_pass_as(text, counts, rules, True)
+        return text
+
+    def _cli_pass_as(self, text: str, counts: Dict[str, int], rules, ascii_only: bool) -> str:
+        enc = json.dumps(text, ensure_ascii=ascii_only)[1:-1]
+
+        def run() -> Tuple[str, Dict[str, int]]:
+            c: Dict[str, int] = {}
+
+            def mark(rule, m, span):
+                s = m.string
+                if _touches_marker(s, span):
+                    return None
+                name = self._cli_name(rule, s, span)
+                if name not in self._enabled_names:
+                    return None
+                value = s[span[0] : span[1]]
+                if name == "infra.ipv4" and value in self.config.ipv4_keep:
+                    return None
+                if name == "pii.email":
+                    domain = value.rsplit("@", 1)[-1].lower()
+                    if any(domain == d or domain.endswith("." + d) for d in self.config.email_keep_domains):
+                        return None
+                if name == "pii.home_dir":
+                    if value == self.config.home_dir_placeholder:
+                        return None
+                    out = self.config.home_dir_placeholder
+                else:
+                    out = self.marker(name)
+                c[name] = c.get(name, 0) + 1
+                return json.dumps(out, ensure_ascii=ascii_only)[1:-1]
+
+            esc = (
+                json.dumps(self.marker(ESCAPED), ensure_ascii=ascii_only)[1:-1]
+                if self.escaped_enabled
+                else None
+            )
+            sink: Dict[str, int] = {}
+            new = _cli.run(enc, rules, mark, esc, sink)
+            if sink.get("escaped_secret"):
+                c[ESCAPED] = c.get(ESCAPED, 0) + sink["escaped_secret"]
+            return new, c
+
+        new, c = _sr.sr_name_reconciled(run, alt_rules="sk-ant-" in enc or "ge_sess_" in enc)
+        if new == enc:
+            return text
+        for k, v in c.items():
+            counts[k] = counts.get(k, 0) + v
+        return json.loads('"' + new + '"')
 
     def redact_text(self, text: str, counts: Optional[Dict[str, int]] = None) -> str:
         """Apply every rule to one string. ``counts`` (if given) is incremented per rule."""
