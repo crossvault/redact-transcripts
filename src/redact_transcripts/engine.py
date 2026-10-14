@@ -634,37 +634,100 @@ def opens_private_key(text: str) -> bool:
         pos = e.end()
 
 
+# --- the tail of a key with no BEGIN ------------------------------------------------------------------
+# A tail line is a key's base64 behind an optional line prefix: the Read tool's `   12→`, `cat -n`'s
+# `   12<TAB>`, or a `> ` quote. Walking up from an END marker at the start of its line (behind the same
+# prefix), the line right above END may be any base64 line (a key's last line is short); every line above
+# it must be a full key line (40-76 base64 characters, not all hex, so a SHA is no key line). A blank
+# line, a prose word, a header, a line with another prefix or a 201st line ends the tail. At least one
+# full line is needed, or a last line that looks random (_random_line). The lines a tail can be
+# made of are exactly the lines the stream holds back (_tail_line), so streamed output equals whole-text
+# output.
+_TAIL_PREFIX = re.compile(r"[ \t]*(?:(?P<n>\d{1,9})(?P<sep>→|\t)|(?P<q>>)[ \t]?)?")
+_TAIL_B64 = re.compile(r"[A-Za-z0-9+/]{1,76}={0,2}")
+_TAIL_FULL = re.compile(r"[A-Za-z0-9+/]{40,76}={0,2}")
+_HEX = re.compile(r"[0-9A-Fa-f]+=*")
+TAIL_MAX_LINES = _sr.SR_PEMC_MAX_LINES  # 200
+
+
+def _prefix(line: str) -> Tuple[str, str]:
+    """(prefix kind, the rest of the line): kind is ``"→"``, ``"\t"`` (numbered), ``">"`` or ``""``."""
+    m = _TAIL_PREFIX.match(line)
+    kind = m.group("sep") or m.group("q") or ""
+    return kind, line[m.end() :]
+
+
+def _tail_line(line: str) -> Optional[str]:
+    """The prefix kind of a line that may belong to a key tail, or None."""
+    kind, rest = _prefix(line.rstrip("\r\n"))
+    return kind if _TAIL_B64.fullmatch(rest.strip(" \t")) else None
+
+
+def _full_line(rest: str) -> bool:
+    rest = rest.strip(" \t")
+    return _TAIL_FULL.fullmatch(rest) is not None and _HEX.fullmatch(rest) is None
+
+
+def _end_prefix(line: str, m: "re.Match[str]") -> Optional[str]:
+    """The prefix kind in front of an END marker that starts its line (behind a prefix), or None."""
+    kind, rest = _prefix(line[: m.start()])
+    return kind if not rest.strip(" \t") else None
+
+
+def _tail_start(text: str, floor: int, ls: int, kind: str) -> Optional[int]:
+    """Where the key tail above the END line starting at ``ls`` begins (not above ``floor``), or None."""
+    start, pos, n, full = None, ls, 0, False
+    while pos > floor and n < TAIL_MAX_LINES:
+        prev = max(text.rfind("\n", floor, pos - 1) + 1, floor)
+        k, rest = _prefix(text[prev : pos - 1].rstrip("\r"))
+        rest = rest.strip(" \t")
+        if k != kind or not (_TAIL_B64.fullmatch(rest) if n == 0 else _full_line(rest)):
+            break
+        full = full or _full_line(rest) or (n == 0 and _random_line(rest))
+        start, pos, n = prev, prev, n + 1
+    return start if full else None
+
+
+def _random_line(rest: str) -> bool:
+    """A short last key line on its own (``…19r==`` right above END): 16+ base64 characters with an
+    upper-case letter, a lower-case letter and a digit, which a prose word or a hex digest never has."""
+    body = rest.rstrip("=")
+    return (
+        len(body) >= 16
+        and any(c.isupper() for c in body)
+        and any(c.islower() for c in body)
+        and any(c.isdigit() for c in body)
+    )
+
+
 def _orphan_ends(text: str, mark: str) -> Tuple[str, int]:
-    """The tail of a key whose BEGIN is not in ``text`` (``tail id_rsa``, a file read from an offset, the
-    second half of a key split over two strings): the run of key lines right before an END marker at the
-    start of its line, with the marker (:func:`_scrub_rules.sr_pem_orphan_end`, at least one full key
-    line). Every END is checked; whole blocks are already replaced. Returns (text, tails found)."""
+    """The tail of a key whose BEGIN is not in ``text`` (``tail id_rsa``, a Read with an offset, the
+    second half of a key split over two strings): its key lines and the END marker become the marker,
+    the line breaks stay. Every END is checked; whole blocks are already replaced. Returns (text, tails)."""
     if "-----" not in text:
         return text, 0
-    parts: List[str] = []
-    prev = n = 0
+    spans: List[Tuple[int, int]] = []
+    floor = 0
     for m in _sr._SR_PEMC_END.finditer(text):
-        seg = text[prev : m.end()]
-        new = _sr.sr_pem_orphan_end(seg)
-        if new != seg:
-            n += 1
-            new = new.replace(_sr.SR_PEMC_MARK, mark)
-        parts.append(new)
-        prev = m.end()
-    if not n:
+        ls = max(text.rfind("\n", floor, m.start()) + 1, floor)
+        kind, rest = _prefix(text[ls : m.start()])
+        if not rest.strip(" \t") and not _sr._SR_PEMC_BEGIN.search(text, floor, m.start()):
+            start = _tail_start(text, floor, ls, kind)
+            if start is not None:
+                spans.append((start, m.end()))
+        floor = m.end()
+    if not spans:
         return text, 0
-    return "".join(parts) + text[prev:], n
-
-
-def _key_line(line: str) -> bool:
-    """A line that may be part of a key body (base64, a PEM header or a blank line): the lines a key tail
-    before an END marker is made of (_scrub_rules._sr_pemc_line)."""
-    return _sr._sr_pemc_line(line.rstrip("\r\n").strip(" \t"), True)
+    parts, pos = [], 0
+    for s, e in spans:
+        parts += [text[pos:s], mark, "".join(c for c in text[s:e] if c in "\r\n")]
+        pos = e
+    return "".join(parts) + text[pos:], len(spans)
 
 
 def _starts_with_end(line: str) -> bool:
     m = _sr._SR_PEMC_END.search(line)
-    return m is not None and not line[: m.start()].strip(" \t")
+    return m is not None and _end_prefix(line, m) is not None
 
 
 class StreamRedactor:
@@ -672,10 +735,10 @@ class StreamRedactor:
 
     Output is released line by line. A secret split across chunks is therefore still caught,
     as long as it does not span a newline. The one multi-line shape, a PEM private-key block,
-    is held back until its END line arrives, and so is a run of key-shaped lines (base64, headers,
-    blank lines; at most 200) until a line shows whether an END marker ends it (the tail of a key
-    whose BEGIN never came, e.g. ``tail id_rsa``). For any chunking, the concatenated output equals
-    ``redactor.redact_text(whole_input)``, with one exception: a line longer than
+    is held back until its END line arrives, and so is a run of base64 lines (at most 200, also behind
+    a ``cat -n``, Read-tool ``N→`` or ``> `` prefix) until a line shows whether an END marker ends it
+    (the tail of a key whose BEGIN never came, e.g. ``tail id_rsa``). For any chunking, the
+    concatenated output equals ``redactor.redact_text(whole_input)``, with one exception: a line longer than
     ``max_buffer`` characters, or a key block longer than that, is flushed early; a
     still-unterminated key block is then redacted to its end and the following lines are
     dropped until the END line.
@@ -738,12 +801,12 @@ class StreamRedactor:
             seg = "".join(ln for ln, _no in self._pending) + line
             self._pending, self._pending_size = [], 0
             return self._emit(seg, first)
-        if _key_line(line) and not opens_private_key(line):
+        if _tail_line(line) is not None and not opens_private_key(line):
             self._pending.append((line, line_no))
             self._pending_size += len(line)
             out = ""
             while self._pending and (
-                len(self._pending) >= _sr.SR_PEMC_MAX_LINES or self._pending_size > self.max_buffer
+                len(self._pending) > TAIL_MAX_LINES or self._pending_size > self.max_buffer
             ):
                 old, no = self._pending.pop(0)
                 self._pending_size -= len(old)
