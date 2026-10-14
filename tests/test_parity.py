@@ -3,8 +3,10 @@
 """Parity with the reference scrubber (the a4sx transcript scrubber these rules are ported from).
 
 tests/data/parity_fixtures.json.gz holds inputs from the reference's own regression and fuzz tests, each
-with the reference's output. Every input is synthetic (random or FAKE/EXAMPLE values, made-up names and
-paths); inputs and outputs are stored base64-encoded, so no file holds a token-shaped string.
+with the reference's output, in two modes: ``server`` (the rules on a decoded string, or a JSONL line
+decoded value by value) and ``cli`` (the reference client's pass over a raw JSONL line). Every input
+is synthetic (random or FAKE/EXAMPLE values, made-up names and paths); inputs and outputs are stored
+base64-encoded, so no file holds a token-shaped string.
 
 - ``redact``: the reference redacts something. Nothing it removed may survive here: every run of three
   or more letters or digits it replaced must be gone from this package's output as well (the markers
@@ -14,13 +16,17 @@ paths); inputs and outputs are stored base64-encoded, so no file holds a token-s
 
 Both run with empty keep-lists (``email_keep_domains``, ``ipv4_keep``), as the reference has none.
 
-To check the stored outputs against a reference implementation, set ``REDACT_REFERENCE`` to
-``module:function`` (``function(text, kind) -> str``, ``kind`` is ``"text"`` or ``"line"``).
+The fixtures are pinned: tests/data/parity_fixtures.lock.json records their digest, counts and the
+reference revision they were made from, and CI fails if the file changes without the lock. To check (or
+refresh) them against a reference implementation, set ``REDACT_REFERENCE`` to ``module:function``
+(``function(text, kind, mode) -> str``; ``kind`` is ``"text"`` or ``"line"``, ``mode`` ``"server"`` or
+``"cli"``) and run this test, or ``python tests/regen_parity_fixtures.py --reference module:function``.
 """
 
 import base64
 import difflib
 import gzip
+import hashlib
 import importlib
 import json
 import os
@@ -31,7 +37,9 @@ import pytest
 
 from redact_transcripts import Config, Redactor, redact_bytes
 
-DATA = json.loads(gzip.decompress((Path(__file__).parent / "data" / "parity_fixtures.json.gz").read_bytes()))
+FIXTURES = Path(__file__).parent / "data" / "parity_fixtures.json.gz"
+LOCK = json.loads((Path(__file__).parent / "data" / "parity_fixtures.lock.json").read_text(encoding="utf-8"))
+DATA = json.loads(gzip.decompress(FIXTURES.read_bytes()))
 R = Redactor(config=Config(email_keep_domains=(), ipv4_keep=frozenset()))
 CHUNK = 250
 _MARK = re.compile(r"\[REDACTED:[a-z0-9_.]+\]")
@@ -67,6 +75,13 @@ def _chunks(cases):
 
 def test_fixtures_are_not_empty():
     assert len(DATA["redact"]) >= 1000 and len(DATA["keep"]) >= 500
+    assert {c["mode"] for c in DATA["redact"]} == {"server", "cli"}
+
+
+def test_fixtures_match_their_lock():
+    """The fixtures are exactly the pinned ones: a change needs a regenerated lock (and a reference run)."""
+    assert hashlib.sha256(FIXTURES.read_bytes()).hexdigest() == LOCK["sha256"]
+    assert {"redact": len(DATA["redact"]), "keep": len(DATA["keep"])} == LOCK["counts"]
 
 
 @pytest.mark.parametrize("start", _chunks(DATA["redact"]))
@@ -90,10 +105,18 @@ def test_what_the_reference_keeps_is_kept(start):
     assert not bad, f"{len(bad)} case(s); first: " + "\n".join(bad[:5])
 
 
-@pytest.mark.skipif(not os.environ.get("REDACT_REFERENCE"), reason="set REDACT_REFERENCE=module:function")
+@pytest.mark.skipif(
+    not os.environ.get("REDACT_REFERENCE"),
+    reason=f"fixtures pinned to reference revision {LOCK['reference_revision']}; "
+    "set REDACT_REFERENCE=module:function to check them against a live reference",
+)
 def test_stored_outputs_match_the_reference():
     module, _, name = os.environ["REDACT_REFERENCE"].partition(":")
     reference = getattr(importlib.import_module(module), name)
-    bad = [c for c in DATA["redact"] if reference(_d(c["in"]), c["kind"]) != _d(c["ref"])]
-    bad += [c for c in DATA["keep"] if reference(_d(c["in"]), c["kind"]) != _d(c["in"])]
+    bad = [c for c in DATA["redact"] if reference(_d(c["in"]), c["kind"], c["mode"]) != _d(c["ref"])]
+    for c in DATA["keep"]:
+        src = _d(c["in"])
+        line = src if c["kind"] == "line" else json.dumps({"c": src})
+        if reference(src, c["kind"], "server") != src or reference(line, "line", "cli") != line:
+            bad.append(c)
     assert not bad, f"{len(bad)} stored case(s) differ from the reference"
