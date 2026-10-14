@@ -353,3 +353,44 @@ def test_cli_mode_boundaries(text, secret):
 def test_cli_mode_can_be_turned_off():
     text = "step one\\n--password FAKEpw1 next"
     assert Redactor(disable=["cli_mode"]).redact_text(text) == text
+
+
+# --- private keys written as string concatenation (the reference client's private-key pass) -----
+
+KEY_LINES = ["MIIEowIBAAKCAQEA" + "FAKEEXAMPLE" * 4, "NOTAREALKEY" * 5 + "AbCd", "QQQQFAKEEXAMPLE" * 3 + "=="]
+CONCAT = {
+    "python-implicit": 'k = ("-----BEGIN RSA PRIVATE KEY-----\\n"\n'
+    + "".join(f'     "{b}\\n"\n' for b in KEY_LINES)
+    + '     "-----END RSA PRIVATE KEY-----\\n")\n',
+    "python-plus": 'k = ("-----BEGIN EC PRIVATE KEY-----\\n" + "'
+    + KEY_LINES[0]
+    + '\\n" + "-----END EC PRIVATE KEY-----")',
+    "javascript": 'const k = "-----BEGIN RSA PRIVATE KEY-----\\n" +\n'
+    + "".join(f'  "{b}\\n" +\n' for b in KEY_LINES)
+    + '  "-----END RSA PRIVATE KEY-----";\n',
+    "go": 'k := "-----BEGIN PRIVATE KEY-----\\n" +\n'
+    + "".join(f'\t"{b}\\n" +\n' for b in KEY_LINES)
+    + '\t"-----END PRIVATE KEY-----"\n',
+    "one-line": 'k = "-----BEGIN PRIVATE KEY-----\\n" "'
+    + KEY_LINES[0]
+    + '\\n" "'
+    + KEY_LINES[1]
+    + '\\n" "-----END PRIVATE KEY-----"',
+}
+
+
+@pytest.mark.parametrize("form", list(CONCAT))
+def test_private_key_as_string_concatenation(form):
+    src = CONCAT[form]
+    out = red(src)
+    assert "FAKEEXAMPLE" not in out and "NOTAREALKEY" not in out, out
+    assert out.count("\n") == src.count("\n")  # line breaks kept
+    jl, report = jsonl({"c": src})
+    assert "FAKEEXAMPLE" not in jl and "NOTAREALKEY" not in jl and "secret.private_key" in report.rules
+    tx, _ = redact_bytes(src.encode(), format="text")
+    assert b"FAKEEXAMPLE" not in tx and b"NOTAREALKEY" not in tx
+
+
+def test_concatenated_strings_without_a_key_stay():
+    text = 'msg = ("-----BEGIN NOTE-----\\n" "hello world\\n" "-----END NOTE-----")'
+    assert red(text) == text

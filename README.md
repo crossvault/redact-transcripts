@@ -138,11 +138,13 @@ The rules are the a4sx transcript scrubber's, in its order and with its false-po
 through them twice, as the reference does on its two paths: once as decoded text, and once as it is
 written inside a JSONL line ("CLI mode": the reference client's raw-JSONL rules and its own key rules, where
 a JSON escape such as a literal `\n` before `--password X` is a boundary). Everything either pass finds is
-redacted; `--disable cli_mode` turns the second pass off.
+redacted; `--disable cli_mode` turns the second pass off. A scheduled CI job
+(`.github/workflows/reference-drift.yml`, weekly and before every release) checks the parity fixtures
+against the published reference client and fails when the reference has changed.
 
 | Rule | Catches |
 |---|---|
-| `secret.private_key` | PEM `-----BEGIN … PRIVATE KEY-----` blocks (multi-line; the block's line breaks are kept), a key printed as a quoted list of its lines, and in the JSONL formats a key split over several strings or records |
+| `secret.private_key` | PEM `-----BEGIN … PRIVATE KEY-----` blocks (any label, PGP too; the block's line breaks are kept): a plain block, one behind line prefixes (`cat -n`, the Read tool's `1→`, `> `, `# `, `│ `), a key in one string with escaped `\n`, a key written as quoted string concatenation (Python `"…\n" "…\n"`, JS and Go `"…\n" +`, one line or many), a key printed as a quoted list of its lines, and in the JSONL formats a key split over several strings or records; a lone BEGIN marker is redacted too. Not: a key in a template literal or heredoc whose lines carry other characters |
 | `secret.anthropic_key`, `secret.openrouter_key`, `secret.openai_key`, `secret.github_token`, `secret.slack_token`, `secret.aws_key_id`, `secret.google_api_key`, `secret.google_oauth_token`, `secret.google_oauth_client_secret`, `secret.groq_key`, `secret.xai_key`, `secret.stripe_key`, `secret.stripe_webhook_secret`, `secret.zai_key` | vendor token shapes, also right after `_`, `-`, `/`, a URL escape (`%20`) or a literal `\n`, glued onto text (exact shape), written back to back, and followed by `_<word>`, `-x`, a path or `+`/`=`; an identifier-shaped run (`slack_xoxb-tokens-and-scopes-guide`, `id-xai-GrokModelConfigLoader`) is kept, and nothing inside base64 or a `data:` URI is rewritten |
 | `secret.token_tail` | the rest of a key glued onto a key that was just redacted (`<key><key>`) |
 | `secret.prefixed_api_token`, `secret.a4sx_session` | a4sx platform tokens: bare-prefix API tokens (`tok_…`, `pol_…`, `pt_…`, `emit_…`, also glued to an upper-case name, `FOO_tok_…`), `ge_tok_…`/`ge_emit_…`-style tokens, and `ge_sess_…` session tokens |
@@ -244,8 +246,7 @@ Known gaps, each pinned by a vector in [`vectors/known_misses.json`](vectors/kno
   project-folder name right after `(`, `[`, `:` or `,` (`(-home-<user>-proj)`);
 - shapes the reference keeps as well: a bare `C:\Users` with no user, `\/home\/<user>` (JSON-escaped
   slashes) in arbitrary strings, `~user/` paths, a URL-encoded SigV4 signature;
-- CLI mode leaves out the reference client's own private-key pass (the decoded-text pass already takes
-  every key block, and fails safe on a lone BEGIN marker) and its product-domain host rule;
+- CLI mode leaves out the reference client's product-domain host rule;
 - in streaming mode a line longer than 1 MiB is cut into pieces, and a secret across the cut is missed;
 - vendor token shapes that are not in the rule table. Report missing shapes, see below.
 

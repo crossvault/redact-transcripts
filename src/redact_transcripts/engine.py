@@ -309,8 +309,35 @@ class Redactor:
                     spans.append(sp)
         return spans
 
+    def _cli_private_keys(self, text: str, counts: Dict[str, int]) -> str:
+        """The reference client's private-key pass, on the string as it is written inside a JSONL line:
+        there a key written as quoted string concatenation is one block of escaped quotes and ``\\n``
+        escapes. Runs first, on the original text (the decoded-text pass would take the BEGIN marker
+        alone). The block's line breaks are kept."""
+        if "-----" not in text:
+            return text
+        enc = json.dumps(text, ensure_ascii=False)[1:-1]
+        mark = json.dumps(self.marker(_PRIVATE_KEY), ensure_ascii=False)[1:-1]
+        new, n0 = _sr.sr_pem_list_redact(enc)
+        if n0:
+            new = new.replace(_sr.SR_PEMC_MARK, mark)
+        spans = _cli.pem_spans(new)
+        if spans:
+            parts, pos = [], 0
+            for s, e in spans:
+                breaks = "".join(c for c in json.loads('"' + new[s:e] + '"') if c in "\r\n")
+                parts += [new[pos:s], mark, json.dumps(breaks)[1:-1]]
+                pos = e
+            new = "".join(parts) + new[pos:]
+        if not (n0 or spans):
+            return text
+        counts[_PRIVATE_KEY] = counts.get(_PRIVATE_KEY, 0) + n0 + len(spans)
+        return json.loads('"' + new + '"')
+
     def _run(self, bound: Sequence[_Bound], text: str, counts: Dict[str, int]) -> str:
         out = text
+        if self.private_key_enabled and self.cli_mode_enabled:
+            out = self._cli_private_keys(out, counts)
         if self.private_key_enabled:
             out = self._private_keys(out, counts)
         for _ in range(MAX_PASSES):

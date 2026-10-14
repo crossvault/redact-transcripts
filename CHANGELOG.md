@@ -29,8 +29,9 @@ false-positive guards (`src/redact_transcripts/_scrub_rules.py`), on both of its
 and the client's raw-JSONL pass ("CLI mode", `src/redact_transcripts/_cli_mode.py`).
 `tests/test_parity.py` checks that everything the reference redacts on its own test corpus is redacted
 here too, and that what it keeps is kept; the fixtures are pinned by a lock file and refreshed with
-`tests/regen_parity_fixtures.py`. Not ported: the client's own private-key pass and its product-domain
-host rule (see README, What it misses).
+`tests/regen_parity_fixtures.py`, and a scheduled workflow (weekly, and before every release) fails when
+the published reference client no longer matches them. Not ported: the client's product-domain host
+rule (see README, What it misses).
 
 #### Added
 - CLI mode: each string is also redacted as it is written inside a JSONL line, with the reference
@@ -54,7 +55,8 @@ host rule (see README, What it misses).
 - `secret.jwt` takes a bare JWT (or 5-part JWE) whole, only when its header decodes to a JOSE header
   naming `alg`; it runs last.
 - `secret.private_key`: a key printed as a quoted list of its lines, a key split over several JSON
-  strings or JSONL records, PGP blocks; a lone BEGIN marker is redacted too.
+  strings or JSONL records, a key written as quoted string concatenation (Python, JS, Go; the reference
+  client's private-key pass), PGP blocks; a lone BEGIN marker is redacted too.
 - Vendor keys written back to back, after `-`, as URL path segments, before `-x`/`/path`/`+`/`=`
   tails, or with another prefix's letters inside a random body.
 

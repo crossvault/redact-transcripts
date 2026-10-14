@@ -9,12 +9,15 @@ escape is a boundary: ``--password X`` right after a literal ``\\n``, ``pwd=X`` 
 lower-case ``/users/<user>/`` right after a literal ``\\t``, or an ``AKIA…`` key id glued onto a JWT. The
 engine runs both, so everything either redacts is redacted. Nothing here is public API.
 
-Not ported: the client's own private-key pass (the decoded-string pass already takes every key block,
-and fails safe on a lone BEGIN marker), and its product-domain host rule.
+Its private-key pass is ported too (:func:`pem_spans`): on the encoded string a key written as quoted
+string concatenation (``"-----BEGIN …\\n" "MIIE…\\n" …`` in Python, ``"…\\n" +`` in JS or Go) is one
+block of escaped quotes and ``\\n`` escapes, which the decoded-string pass cannot see as a key. Not ported:
+the client's product-domain host rule.
 """
 
 from __future__ import annotations
 
+import bisect
 import re
 from typing import Callable, Dict, List, NamedTuple, Optional, Tuple
 
@@ -110,6 +113,66 @@ def cli_rules() -> List[CliRule]:
         n = full.split(".", 1)[1]
         out.append(CliRule(n, p, c, None, False, n in pii, tuple(_sr.SR_EXTRA_PRECHECK.get(full, ()))))
     return [r for r in out if r.name != "jwt"] + [r for r in out if r.name == "jwt"]
+
+
+# --- private-key blocks, as the client finds them in a raw JSONL line ---------------------------------
+# A block runs from a BEGIN marker to the nearest END marker when everything between could be key body
+# (base64, PEM headers, spaces, line breaks or escaped `\n` inside a JSON string), or a line prefix a tool
+# or a quote puts in front of each key line (`     1→`, `cat -n`, `> `, `# `, `* `, `│ `, `; `, `<br>`), or
+# an ESCAPED quote (a key written as string concatenation inside a JSON string), but not an escaped quote
+# followed by `,` or `:` (an inner JSON field boundary). A bare `"` ends the candidate, so a block never
+# leaves its JSON string. Linear: END starts are found once, and each stretch is scanned at most once.
+_PEM_BEGIN = re.compile(r"-----BEGIN [A-Z0-9 ]{0,40}PRIVATE KEY(?: BLOCK)?-----", re.I)
+_PEM_END = re.compile(r"-----END [A-Z0-9 ]{0,40}PRIVATE KEY(?: BLOCK)?-----", re.I)
+_PEM_STOP = re.compile("[^A-Za-z0-9+/=:,.\\- \t\r\n\\\\\u2192\u2502\u2503\u2551|#>*<;]")
+_PEM_FIELD_SEP = re.compile(r"[ \t]*[,:]")
+_PEM_MAX_BODY = 32768
+
+
+def _is_escaped(text: str, i: int) -> bool:
+    """True when text[i] follows an odd run of backslashes (an escaped character in a JSON string)."""
+    j = i
+    while j > 0 and text[j - 1] == "\\":
+        j -= 1
+    return (i - j) % 2 == 1
+
+
+def pem_spans(text: str) -> List[Tuple[int, int]]:
+    """(start, end) of every private-key block in a raw JSONL line (or a JSON-encoded string), BEGIN
+    through the nearest END."""
+    if "-----" not in text:
+        return []
+    ends = list(_PEM_END.finditer(text))
+    if not ends:
+        return []
+    end_starts = [m.start() for m in ends]
+    spans: List[Tuple[int, int]] = []
+    skip = clean = 0
+    for b in _PEM_BEGIN.finditer(text):
+        if b.start() < skip:
+            continue
+        i = bisect.bisect_left(end_starts, b.end())
+        if i == len(ends):
+            break
+        e = ends[i]
+        if e.start() - b.end() > _PEM_MAX_BODY:
+            continue
+        lo = max(b.end(), clean)
+        s = _PEM_STOP.search(text, lo, e.start()) if lo < e.start() else None
+        while (
+            s
+            and text[s.start()] == '"'
+            and _is_escaped(text, s.start())
+            and not _PEM_FIELD_SEP.match(text, s.start() + 1)
+        ):
+            s = _PEM_STOP.search(text, s.start() + 1, e.start())
+        if s:
+            skip = clean = s.start()
+            continue
+        clean = e.start()
+        spans.append((b.start(), e.end()))
+        skip = e.end()
+    return spans
 
 
 #: A replaced span must not cut a JSON escape in half or contain a bare quote (the string stays JSON).
