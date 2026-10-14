@@ -28,6 +28,7 @@ import difflib
 import gzip
 import hashlib
 import importlib
+import importlib.util
 import json
 import os
 import re
@@ -120,3 +121,48 @@ def test_stored_outputs_match_the_reference():
         if reference(src, c["kind"], "server") != src or reference(line, "line", "cli") != line:
             bad.append(c)
     assert not bad, f"{len(bad)} stored case(s) differ from the reference"
+
+
+def _published_cli():
+    """The published reference client (``REDACT_REFERENCE_CLI``: a path to its downloaded file), or None.
+    With ``REDACT_REQUIRE_REFERENCE`` set (the scheduled drift job, and every release), a missing or
+    unloadable client is a failure, never a skip."""
+    path = os.environ.get("REDACT_REFERENCE_CLI")
+    if not path:
+        if os.environ.get("REDACT_REQUIRE_REFERENCE"):
+            pytest.fail("REDACT_REQUIRE_REFERENCE is set but REDACT_REFERENCE_CLI is not")
+        return None
+    spec = importlib.util.spec_from_file_location("redact_reference_cli", path)
+    if spec is None or spec.loader is None:
+        pytest.fail(f"cannot load the reference client from {path}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    if not callable(getattr(module, "scrub", None)):
+        pytest.fail("the reference client has no scrub(text) function")
+    return module
+
+
+def test_published_cli_matches_the_fixtures():
+    """Drift check against the published reference client: every stored ``cli`` output is what it makes
+    today, and what the fixtures keep it keeps. A difference means the reference changed: regenerate the
+    fixtures (tests/regen_parity_fixtures.py) and port the change."""
+    cli = _published_cli()
+    if cli is None:
+        pytest.skip(
+            f"fixtures pinned to reference revision {LOCK['reference_revision']}; the scheduled "
+            "reference-drift workflow runs this against the published client"
+        )
+    bad = []
+    for c in DATA["redact"]:
+        if c["mode"] == "cli":
+            src = _d(c["in"])
+            if cli.scrub(src)[0] != _d(c["ref"]):
+                bad.append(src)
+    for c in DATA["keep"]:
+        src = _d(c["in"])
+        line = src if c["kind"] == "line" else json.dumps({"c": src})
+        if cli.scrub(line)[0] != line:
+            bad.append(line)
+    assert not bad, (
+        f"reference drift: {len(bad)} case(s) differ from the published client; first: {bad[:3]!r}"
+    )

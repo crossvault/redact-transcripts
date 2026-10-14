@@ -1,0 +1,36 @@
+# SPDX-FileCopyrightText: 2026 crossVault GmbH
+# SPDX-License-Identifier: Apache-2.0
+#
+# Checks the parity fixtures against the published reference client (the a4sx CLI). It fails loudly when
+# the reference changed: regenerate the fixtures (tests/regen_parity_fixtures.py) and port the change.
+# REDACT_REQUIRE_REFERENCE turns a missing or unloadable client into a failure, never a skip.
+name: Reference drift
+
+on:
+  schedule:
+    - cron: "23 6 * * 1"  # weekly, Monday 06:23 UTC
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  drift:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install --upgrade pip
+      - run: pip install -e '.[test]'
+      - name: Fetch the published reference client
+        run: curl -fsSL --retry 3 --max-time 60 https://session-exchange.com/cli/a4sx.py -o "$RUNNER_TEMP/a4sx_reference.py"
+      - name: Stored outputs equal the published reference
+        env:
+          REDACT_REFERENCE_CLI: ${{ runner.temp }}/a4sx_reference.py
+          REDACT_REQUIRE_REFERENCE: "1"
+        run: pytest -p no:cacheprovider -o addopts="" -v tests/test_parity.py -k published_cli

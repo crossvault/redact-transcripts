@@ -1,8 +1,8 @@
 {
   "reference_revision": "2026-10-14 (with the prefixed_api_token rename)",
-  "sha256": "4383be653461ef05ae4601719ba56f23232cf75e107afd37219ddca94e9ce6bd",
+  "sha256": "dff05083462a0a510f51f39b7ab689945fe7bd745f0c7bd525499fb51d3508b9",
   "counts": {
-    "redact": 2843,
-    "keep": 1341
+    "redact": 3779,
+    "keep": 1406
   }
 }
