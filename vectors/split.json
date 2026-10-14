@@ -29,7 +29,7 @@
       ],
       "expect": "redacted",
       "rules": [
-        "secret.bearer"
+        "secret.auth_header"
       ],
       "absent": [
         "FAKE-EXAMPLE-0000-token"
@@ -98,7 +98,7 @@
         "FAKEEXAMPLEFAKEEXAMPLE",
         "NOTAREALKEY"
       ],
-      "output": "{\"n\": 1}\n[REDACTED:secret.private_key]\n{\"n\": 2}\n"
+      "output": "{\"n\": 1}\n[REDACTED:secret.private_key]\n\n\n\n{\"n\": 2}\n"
     },
     {
       "id": "jsonl-pem-in-string",

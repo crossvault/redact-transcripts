@@ -38,7 +38,8 @@ def test_output_is_released_per_line():
 def test_key_block_is_held_until_end():
     s = StreamRedactor()
     assert s.feed("-----BEGIN PRIVATE KEY-----\nAAAA\n") == ""
-    assert s.feed("-----END PRIVATE KEY-----\n") == "[REDACTED:secret.private_key]\n"
+    # the block's line breaks are kept, so line numbers in a report stay true
+    assert s.feed("-----END PRIVATE KEY-----\n") == "[REDACTED:secret.private_key]\n\n\n"
 
 
 def test_oversized_key_block_is_cut_and_swallowed():

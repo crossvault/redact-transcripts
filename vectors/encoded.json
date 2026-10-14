@@ -9,7 +9,7 @@
       "input": "{\"type\":\"user\",\"sessionId\":\"00000000-0000-4000-8000-000000000001\",\"uuid\":\"00000000-0000-4000-8000-000000000004\",\"parentUuid\":null,\"timestamp\":\"2026-01-01T00:00:04Z\",\"message\":{\"role\":\"user\",\"content\":[{\"type\":\"tool_result\",\"tool_use_id\":\"toolu_FAKE02\",\"content\":\"{\\\"api_key\\\": \\\"FAKE-EXAMPLE-api-key\\\"}\"}]}}\n",
       "expect": "redacted",
       "rules": [
-        "secret.assignment"
+        "secret.json_assignment"
       ],
       "absent": [
         "FAKE-EXAMPLE-api-key"
@@ -22,12 +22,12 @@
       "input": "{\\\"password\\\":\\\"FAKE-hunter2\\\"}\n",
       "expect": "redacted",
       "rules": [
-        "secret.assignment"
+        "secret.json_assignment"
       ],
       "absent": [
         "FAKE-hunter2"
       ],
-      "output": "{\\\"password\\\":\\\"[REDACTED:secret.assignment]\\\"}\n"
+      "output": "{\\\"password\\\":\\\"[REDACTED:secret.json_assignment]\\\"}\n"
     },
     {
       "id": "unicode-escaped",
@@ -91,7 +91,7 @@
       "input": "Authorization: Basic ZXhhbXBsZS11c2VyOkZBS0UtUEFTU1dPUkQ=\n",
       "expect": "redacted",
       "rules": [
-        "secret.basic_auth"
+        "secret.auth_header"
       ],
       "absent": [
         "ZXhhbXBsZS11c2VyOkZBS0UtUEFTU1dPUkQ="

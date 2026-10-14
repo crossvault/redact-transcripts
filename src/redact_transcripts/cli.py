@@ -17,7 +17,7 @@ import sys
 from typing import BinaryIO, List, Optional, Sequence
 
 from . import __version__
-from .engine import KEYED_VALUE, Redactor, Report, StreamRedactor
+from .engine import DEEP_NESTING, ESCAPED, KEYED_VALUE, Redactor, Report, StreamRedactor
 from .formats import JsonlFormat, TextFormat, detect_format, format_names, get_format
 from .people import RULE_NAMES as PERSON_RULES
 from .rules import Rule, default_rules
@@ -156,7 +156,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     except ValueError as e:
         sys.stderr.write(f"{PROG}: {e}\n")
         return 2
-    known = [r.name for r in rules] + [KEYED_VALUE]
+    known = list(dict.fromkeys([n for r in rules for n in r.names] + [KEYED_VALUE, ESCAPED, DEEP_NESTING]))
     if args.third_parties:
         known += list(PERSON_RULES)
     for d in args.disable:
