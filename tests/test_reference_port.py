@@ -436,3 +436,91 @@ def test_public_material_and_marker_mentions_stay(name):
     text = PUBLIC[name]
     out, report = redact_bytes(text.encode(), format="text")
     assert out.decode() == text and not report.rules
+
+
+# --- key tails: the 200-line bound, line prefixes, prose above ------------------------------------
+
+from redact_transcripts.engine import TAIL_MAX_LINES  # noqa: E402
+
+_AN = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+
+
+def _key_lines(n, seed):
+    import random
+
+    rng = random.Random(seed)
+    full = ["".join(rng.choice(_AN) for _ in range(64)) for _ in range(n - 1)]
+    return [*full, "".join(rng.choice(_AN) for _ in range(30)) + "Ab1=="]
+
+
+def _stream(text, size):
+    s = StreamRedactor(R)
+    return "".join(s.feed(text[i : i + size]) for i in range(0, len(text), size)) + s.close()
+
+
+@pytest.mark.parametrize("chunk", [1, 65, 97, 4096])
+def test_key_tail_lengths_around_the_bound(chunk):
+    """Every tail length from 1 to twice the bound (and one over): no key line survives up to the bound,
+    only the lines above it survive past it, and streamed output equals whole-text output."""
+    lengths = (
+        range(1, 2 * TAIL_MAX_LINES + 2)
+        if chunk in (97, 4096)
+        else (1, 2, TAIL_MAX_LINES - 1, TAIL_MAX_LINES, TAIL_MAX_LINES + 1, 2 * TAIL_MAX_LINES)
+    )
+    for n in lengths:
+        lines = _key_lines(n, n)
+        text = "head\n" + "\n".join(lines) + "\n-----END PRIVATE KEY-----\nok\n"
+        whole = R.redact_text(text)
+        assert _stream(text, chunk) == whole, (n, chunk)
+        kept = [ln for ln in lines if ln in whole]
+        assert kept == lines[: max(0, n - TAIL_MAX_LINES)], (n, len(kept))
+        assert whole.count("\n") == text.count("\n")
+
+
+@pytest.mark.parametrize(
+    "prefix",
+    [lambda i: f"{i:6}→", lambda i: f"{i:6}\t", lambda i: "> "],
+    ids=["read-tool", "cat-n", "quote"],
+)
+def test_key_tail_behind_a_line_prefix(prefix):
+    lines = _key_lines(6, 3)
+    text = "".join(prefix(i + 10) + ln + "\n" for i, ln in enumerate(lines))
+    text += prefix(16) + "-----END RSA PRIVATE KEY-----\n" + prefix(17) + "\n"
+    out = R.redact_text(text)
+    assert not any(ln in out for ln in lines), out
+    assert _stream(text, 7) == out and out.count("\n") == text.count("\n")
+    jl, _ = jsonl({"c": text})
+    assert not any(ln in jl for ln in lines)
+
+
+def test_mixed_prefixes_do_not_join_a_tail():
+    lines = _key_lines(3, 4)
+    text = "> " + lines[0] + "\n" + "\n".join(lines[1:]) + "\n-----END PRIVATE KEY-----\n"
+    out = R.redact_text(text)
+    assert lines[0] in out and lines[1] not in out and lines[2] not in out
+
+
+@pytest.mark.parametrize(
+    "above",
+    [
+        "Here\nare\nsome\nwords\n",
+        "Note: the key below\n",
+        "da39a3ee5e6b4b0d3255bfef95601890afd80709\n",
+        "\n\n",
+        "-----BEGIN PRIVATE KEY-----\n" + "\n".join(_key_lines(2, 9)) + "\n-----END PRIVATE KEY-----\n\n",
+    ],
+    ids=["words", "header-like", "sha1", "blank", "whole-block-before"],
+)
+def test_prose_above_a_key_tail_stays(above):
+    lines = _key_lines(3, 5)
+    text = above + "\n".join(lines) + "\n-----END PRIVATE KEY-----\nok\n"
+    out = R.redact_text(text)
+    assert not any(ln in out for ln in lines)
+    keep = above if "BEGIN" not in above else "\n\n"
+    assert out.startswith("[REDACTED:secret.private_key]" if "BEGIN" in above else keep), out
+    assert _stream(text, 5) == out
+
+
+def test_a_digest_above_an_end_mention_is_no_tail():
+    text = "da39a3ee5e6b4b0d3255bfef95601890afd80709\n-----END PRIVATE KEY-----\n"
+    assert R.redact_text(text) == text

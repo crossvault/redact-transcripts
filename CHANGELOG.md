@@ -6,6 +6,14 @@ All notable changes are listed here. The format follows
 
 ## [Unreleased]
 
+### Fixed (review of the key-tail change)
+- Streaming: a key tail of exactly 200 lines kept its first line in text mode (the stream held one line
+  fewer than the tail walk takes). Streamed output now equals whole-text output for key tails of every
+  length, including the marker's position.
+- Key tails behind the Read tool's `N→` numbers, `cat -n` numbers or a `> ` quote are redacted.
+- Only base64 key lines belong to a key tail: prose words, `Word: …` lines, blank lines and hex digests
+  above it stay (they were swallowed into the marker).
+
 ### Fixed (follow-up to the reference port)
 - Text mode: the tail of a private key before its END line, with no BEGIN (`tail id_rsa`, a file read
   from an offset), is redacted, as in the JSONL formats. The stream holds a run of key-shaped lines (at
